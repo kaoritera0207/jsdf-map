@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>自衛隊 基地・防衛装備まとめ 2026</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap');
+:root{
+  --bg:#050d1c;--bg2:#0b1726;--bg3:#132840;--border:#1e3a5e;
+  --text:#ddeaf6;--dim:#7a9db8;--head:#f0f6ff;
+  --air:#22CCEE;--air-d:#061a22;
+  --sea:#1199CC;--sea-d:#061422;
+  --land:#00CC66;--land-d:#041a0e;
+  --def:#CC4444;--def-d:#1a0606;
+  --gold:#CCAA44;--gold-d:#1a1406;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans JP',sans-serif;font-size:14px;line-height:1.7}
+#hdr{position:sticky;top:0;z-index:9000;background:rgba(5,13,28,.97);backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;padding:0 16px;height:50px}
+.htitle{font-size:14px;font-weight:700;color:var(--head);white-space:nowrap}
+.hyear{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--gold);margin-right:4px}
+#hnav{display:flex;gap:4px;overflow-x:auto;flex:1}
+.hnav{padding:4px 10px;border-radius:4px;border:1px solid var(--border);background:none;
+  color:var(--dim);font-size:12px;cursor:pointer;white-space:nowrap;transition:.15s;font-family:'Noto Sans JP',sans-serif}
+.hnav:hover{background:var(--bg3);color:var(--head)}
+.hnav.air{color:var(--air);border-color:var(--air)}.hnav.sea{color:var(--sea);border-color:var(--sea)}
+.hnav.land{color:var(--land);border-color:var(--land)}.hnav.def{color:var(--def);border-color:var(--def)}
+.hnav.gold{color:var(--gold);border-color:var(--gold)}
+#map-section{background:var(--bg);border-bottom:2px solid var(--border)}
+#map-header{text-align:center;padding:10px 0 2px;background:var(--bg)}
+#map-header .t1{color:#9cc4e0;font-size:13px;letter-spacing:5px}
+#map-header .t2{color:#5a8aaa;font-size:10px;letter-spacing:3px;padding-bottom:2px}
+#frow{display:flex;gap:5px;padding:6px 12px;flex-wrap:wrap;justify-content:center;
+  background:rgba(5,13,28,.8);border-bottom:1px solid var(--border)}
+.fbtn{padding:4px 12px;border-radius:20px;border:1.5px solid;font-size:12px;cursor:pointer;
+  font-family:'Noto Sans JP',sans-serif;transition:.15s;font-weight:500}
+.fbtn.ball{background:rgba(5,13,28,.9);color:var(--head);border-color:#2a4a6a}
+.fbtn.fair{background:rgba(6,26,34,.8);color:var(--air);border-color:var(--air)}
+.fbtn.fsea{background:rgba(6,20,34,.8);color:var(--sea);border-color:var(--sea)}
+.fbtn.fland{background:rgba(4,26,14,.8);color:var(--land);border-color:var(--land)}
+.fbtn.fboth{background:rgba(26,20,6,.8);color:var(--gold);border-color:var(--gold)}
+.fbtn.inactive{opacity:.28}.fbtn.active{box-shadow:0 0 8px rgba(255,255,255,.12)}
+#map-scroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;
+  background:#050d1c;cursor:grab}
+#map-scroll:active{cursor:grabbing}
+#map-scroll::-webkit-scrollbar{height:3px}
+#map-scroll::-webkit-scrollbar-track{background:#050d1c}
+#map-scroll::-webkit-scrollbar-thumb{background:#1a4060;border-radius:2px}
+svg#map{display:block;height:auto}
+@media(min-width:750px){svg#map{width:100%;max-width:1300px}}
+@media(max-width:749px){svg#map{width:1100px;min-width:1100px}}
+#scroll-hint{display:none;text-align:center;padding:4px 0;
+  font-size:10px;color:var(--dim);font-family:'IBM Plex Mono',monospace;letter-spacing:.06em;
+  background:rgba(5,13,28,.8);border-top:1px solid var(--border)}
+@media(max-width:749px){#scroll-hint{display:block}}
+#legend{display:flex;gap:12px;padding:6px 12px;justify-content:center;flex-wrap:wrap;
+  background:rgba(5,13,28,.7);font-size:11px;border-top:1px solid var(--border)}
+.leg{display:flex;align-items:center;gap:5px}
+.ldot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+#modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);
+  z-index:99998;align-items:center;justify-content:center;padding:16px}
+#modal-overlay.open{display:flex}
+#modal{background:#0b1828;border:1px solid var(--border);border-radius:10px;
+  padding:20px 22px 18px;max-width:420px;width:100%;position:relative;
+  box-shadow:0 20px 80px rgba(0,0,0,.95);animation:mIn .18s ease-out;
+  max-height:90vh;overflow-y:auto}
+@keyframes mIn{from{transform:scale(.93);opacity:0}to{transform:scale(1);opacity:1}}
+#modal-close{position:absolute;top:10px;right:12px;background:none;border:none;
+  color:var(--dim);font-size:18px;cursor:pointer;line-height:1;padding:4px}
+#modal-close:hover{color:var(--head)}
+.m-badge{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:10px;
+  letter-spacing:.1em;padding:2px 7px;border-radius:3px;text-transform:uppercase;
+  font-weight:600;margin-bottom:6px}
+.pb-air{background:var(--air-d);color:var(--air);border:1px solid var(--air)}
+.pb-sea{background:var(--sea-d);color:var(--sea);border:1px solid var(--sea)}
+.pb-land{background:var(--land-d);color:var(--land);border:1px solid var(--land)}
+.pb-both{background:var(--gold-d);color:var(--gold);border:1px solid var(--gold)}
+.m-org{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--dim);margin-bottom:2px}
+.m-name{font-size:17px;font-weight:700;color:var(--head);margin-bottom:2px}
+.m-loc{font-size:12px;color:var(--dim);margin-bottom:10px}
+.m-units{font-size:13px;color:var(--text);line-height:1.7;
+  padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:10px}
+.m-why-lbl{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--gold);
+  letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.m-why{font-size:12px;color:#a8c8e0;line-height:1.7;margin-bottom:14px}
+.m-footer{display:flex;gap:8px;justify-content:flex-end}
+#m-goto{padding:8px 18px;border-radius:5px;border:1px solid var(--gold);
+  background:rgba(204,170,68,.1);color:var(--gold);font-size:13px;cursor:pointer;
+  font-family:'Noto Sans JP',sans-serif;transition:.15s}
+#m-goto:hover{background:rgba(204,170,68,.25)}
+#m-dismiss{padding:8px 14px;border-radius:5px;border:1px solid var(--border);
+  background:none;color:var(--dim);font-size:13px;cursor:pointer;
+  font-family:'Noto Sans JP',sans-serif;transition:.15s}
+#m-dismiss:hover{background:var(--bg3);color:var(--head)}
+#content{max-width:960px;margin:0 auto;padding:36px 28px 80px}
+.stat-row{display:flex;gap:24px;flex-wrap:wrap;margin:0 0 36px}
+.stat .sn{font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:600;color:var(--gold);display:block}
+.stat .sl{font-size:11px;color:var(--dim)}
+.section{margin-bottom:52px;scroll-margin-top:58px}
+.sec-hdr{display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.sbadge{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.14em;padding:3px 8px;border-radius:3px;text-transform:uppercase;font-weight:600}
+.sb-air{background:var(--air-d);color:var(--air);border:1px solid var(--air)}
+.sb-sea{background:var(--sea-d);color:var(--sea);border:1px solid var(--sea)}
+.sb-land{background:var(--land-d);color:var(--land);border:1px solid var(--land)}
+.sb-def{background:var(--def-d);color:var(--def);border:1px solid var(--def)}
+.sb-gold{background:var(--gold-d);color:var(--gold);border:1px solid var(--gold)}
+.sec-hdr h2{font-size:18px;font-weight:700;color:var(--head)}
+.sub{margin-bottom:24px}
+.sub-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.stripe{width:3px;border-radius:2px;flex-shrink:0;align-self:stretch;min-height:18px}
+.sub-hdr h3{font-size:14px;font-weight:700;color:var(--head)}
+.sub-meta{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--dim)}
+.note{background:var(--bg3);border-left:3px solid #3a5a7a;border-radius:4px;padding:10px 15px;margin-bottom:12px;font-size:13px;color:#a8c8e0;line-height:1.7}
+.note b{color:var(--head)}
+.why{background:var(--bg3);border-left:3px solid var(--gold);border-radius:4px;padding:11px 15px;margin-top:10px;font-size:13px;color:#b8d4e4;line-height:1.7}
+.why b{color:var(--gold)!important}
+.tbl-wrap{overflow-x:auto;margin-top:4px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{background:var(--bg3);color:var(--dim);font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;padding:8px 11px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+tbody tr{border-bottom:1px solid var(--border)}tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:rgba(255,255,255,.02)}
+tbody td{padding:9px 11px;vertical-align:top;color:var(--text);line-height:1.6}
+tbody td:first-child{color:var(--head);font-weight:500;white-space:nowrap}
+.tag{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:10px;padding:1px 5px;border-radius:3px;margin-right:3px;vertical-align:middle}
+.ta{background:var(--air-d);color:var(--air);border:1px solid var(--air)}
+.ts{background:var(--sea-d);color:var(--sea);border:1px solid var(--sea)}
+.tl{background:var(--land-d);color:var(--land);border:1px solid var(--land)}
+.tn{background:#0a1a08;color:#44DD88;border:1px solid #1a5a28}
+.td{background:#0a0a1a;color:#8888DD;border:1px solid #22226a}
+.layer-stack{display:flex;flex-direction:column;gap:3px;margin-top:6px}
+.li{display:flex;align-items:flex-start;gap:12px;background:var(--bg3);border-radius:4px;padding:11px 15px;border-left:3px solid transparent}
+.ln{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--dim);min-width:72px;flex-shrink:0;padding-top:2px}
+.lt{font-weight:600;color:var(--head);font-size:13px;margin-bottom:2px}
+.le{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#7aaac8;margin-top:3px}
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+.sc{background:var(--bg3);border-radius:6px;padding:14px 16px;border:1px solid var(--border)}
+.sc-lbl{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}
+.sc-thr{font-size:14px;font-weight:700;color:var(--def);margin-bottom:7px}
+.sc-u{font-size:12px;color:var(--text);line-height:1.8}
+.sc-u span{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--dim)}
+.rb{display:flex;align-items:center;gap:10px;margin:5px 0}
+.rb-n{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--head);min-width:130px}
+.rb-o{flex:1;background:var(--bg);border-radius:2px;height:9px;overflow:hidden}
+.rb-i{height:100%;border-radius:2px}
+.rb-v{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--dim);min-width:80px;text-align:right}
+footer{margin-top:60px;padding-top:16px;border-top:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--dim);line-height:1.8}
+@media(max-width:700px){#content{padding:20px 12px 60px}.sg{grid-template-columns:1fr}#hnav{display:none}}
+</style>
+</head>
+<body>
+<div id="hdr">
+  <div><span class="htitle">自衛隊 基地・防衛装備</span><span class="hyear">2026</span></div>
+  <nav id="hnav">
+    <button class="hnav gold" onclick="go('s-cmd')">📡 指揮中枢</button>
+    <button class="hnav air"  onclick="go('s-air')">✈️ 空自</button>
+    <button class="hnav sea"  onclick="go('s-sea')">⚓ 海自</button>
+    <button class="hnav land" onclick="go('s-land')">🪖 陸自</button>
+    <button class="hnav def"  onclick="go('s-def')">🛡️ 防衛装備</button>
+    <button class="hnav gold" onclick="go('s-str')">📐 全体像</button>
+  </nav>
+</div>
+<div id="map-section">
+  <div id="map-header">
+    <div class="t1">自衛隊　駐屯地・基地マップ</div>
+    <div class="t2">JAPAN SELF-DEFENSE FORCE — INSTALLATIONS 2026</div>
+  </div>
+  <div id="frow">
+    <button class="fbtn ball active" onclick="filterAll('all')">全（32拠点）</button>
+    <button class="fbtn fair"        onclick="filterAll('air')">✈ 空自</button>
+    <button class="fbtn fsea"        onclick="filterAll('sea')">⚓ 海自</button>
+    <button class="fbtn fland"       onclick="filterAll('land')">🪖 陸自</button>
+    <button class="fbtn fboth"       onclick="filterAll('both')">📡 統合・複合</button>
+  </div>
+  <div id="map-scroll"><svg id="map"></svg></div>
+  <div id="scroll-hint">← スクロールして両脇のカードを表示 →</div>
+  <div id="legend">
+    <div class="leg"><div class="ldot" style="background:var(--air)"></div><span style="color:var(--air)">航空自衛隊</span></div>
+    <div class="leg"><div class="ldot" style="background:var(--sea)"></div><span style="color:var(--sea)">海上自衛隊</span></div>
+    <div class="leg"><div class="ldot" style="background:var(--land)"></div><span style="color:var(--land)">陸上自衛隊</span></div>
+    <div class="leg"><div class="ldot" style="background:var(--gold)"></div><span style="color:var(--gold)">統合・複合</span></div>
+    <div class="leg" style="color:var(--dim);font-family:'IBM Plex Mono',monospace;font-size:10px">カード/ピンをタップ→詳細</div>
+  </div>
+</div>
+<div id="modal-overlay" onclick="handleOverlayClick(event)">
+  <div id="modal">
+    <button id="modal-close" onclick="closeModal()">✕</button>
+    <span class="m-badge" id="m-badge"></span>
+    <div class="m-org"   id="m-org"></div>
+    <div class="m-name"  id="m-name"></div>
+    <div class="m-loc"   id="m-loc"></div>
+    <div class="m-units" id="m-units"></div>
+    <div class="m-why-lbl">なぜここか？</div>
+    <div class="m-why"   id="m-why"></div>
+    <div class="m-footer">
+      <button id="m-dismiss" onclick="closeModal()">閉じる</button>
+      <button id="m-goto"    onclick="gotoSection()">詳細を見る ↓</button>
+    </div>
+  </div>
+</div>
+<div id="content">
+  <div class="stat-row">
+    <div class="stat"><span class="sn">32</span><span class="sl">地図上の主要拠点</span></div>
+    <div class="stat"><span class="sn">160+</span><span class="sl">全国の駐屯地・基地</span></div>
+    <div class="stat"><span class="sn">704回</span><span class="sl">緊急発進（2024年度）</span></div>
+    <div class="stat"><span class="sn">7</span><span class="sl">防衛の重層レイヤー</span></div>
+  </div>
+
+  <section class="section" id="s-cmd">
+    <div class="sec-hdr"><span class="sbadge sb-gold">統合指揮</span><h2>指揮の頂点</h2></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>場所</th><th>組織</th><th>役割</th></tr></thead>
+      <tbody>
+        <tr><td>市ヶ谷（東京都新宿区）</td><td>防衛省本省 / 統合幕僚監部 / 陸上総隊司令部 / PAC-3高射隊</td><td>陸・海・空すべての最高指揮中枢。統合幕僚長が三自衛隊の作戦を一元管理する</td></tr>
+        <tr><td>横田基地（東京都福生市）</td><td>航空総隊司令部（日米共用）/ 在日米軍司令部・第5空軍</td><td>日本全土の航空防衛作戦を統括。在日米軍司令部とも同居し「日米共同の空の頭脳」。2012年に府中から移転</td></tr>
+        <tr><td>府中基地（東京都府中市）</td><td>宇宙作戦団 / 航空開発実験集団 / 自衛隊指揮通信システム隊</td><td>かつての防空指揮中枢。現在は宇宙ゴミ（デブリ）監視・宇宙作戦の拠点に転換</td></tr>
+      </tbody>
+    </table></div>
+    <div class="why"><b>なぜ市ヶ谷・横田か？</b> 旧陸軍士官学校跡地（市ヶ谷）と米軍整備の大型滑走路（横田）、いずれも東京圏の中枢に位置し指揮通信上の利便性が高い。</div>
+  </section>
+
+  <section class="section" id="s-air">
+    <div class="sec-hdr"><span class="sbadge sb-air">JASDF</span><h2>航空自衛隊</h2></div>
+    <div class="note"><b>指揮系統：</b>航空総隊（横田）→ 4個航空方面隊 → 各航空団・飛行隊</div>
+    <div class="sub">
+      <div class="sub-hdr"><div class="stripe" style="background:#E05050"></div><h3>北部航空方面隊</h3><span class="sub-meta">担当：北海道〜北陸以北 ／ 司令部：三沢（青森）</span></div>
+      <div class="tbl-wrap"><table><thead><tr><th>基地名</th><th>所在地</th><th>主な部隊・装備</th><th>役割と立地理由</th></tr></thead><tbody>
+        <tr><td>三沢基地</td><td>青森県三沢市</td><td>北部航空方面隊司令部<br><span class="tag ta">F-35A</span> 第3航空団 / 米空軍も駐留</td><td>空自唯一の日米共同使用航空基地。本州最北端に近く、ロシア機スクランブルの第一線。F-35Aで北方最前線の抑止力を担う</td></tr>
+        <tr><td>千歳基地</td><td>北海道千歳市</td><td><span class="tag ta">F-15J</span> 第2航空団 / 特別航空輸送隊（政府専用機）</td><td>北海道全域の防空拠点。新千歳空港に隣接し、ロシアとの距離が近い北の要衝</td></tr>
+      </tbody></table></div>
+      <div class="why"><b>なぜ北海道・三沢か？</b> 北方はロシアとの地理的近接が最大の脅威要因。千歳はロシア機南下時の防衛ラインに位置し、三沢はさらに前に出た迎撃の「矢の先端」。冷戦期に対ソ防衛を最優先として大規模整備が進められた。</div>
+    </div>
+    <div class="sub">
+      <div class="sub-hdr"><div class="stripe" style="background:#E09030"></div><h3>中部航空方面隊</h3><span class="sub-meta">担当：東北〜近畿 ／ 司令部：入間（埼玉）</span></div>
+      <div class="tbl-wrap"><table><thead><tr><th>基地名</th><th>所在地</th><th>主な部隊・装備</th><th>役割と立地理由</th></tr></thead><tbody>
+        <tr><td>入間基地</td><td>埼玉県狭山市</td><td>航空支援集団司令部 / C-1/C-2 輸送機 / PAC-3高射隊</td><td>兵站・輸送の統括本部。中部航空方面隊司令部でもある。C-1/C-2輸送機を運用し国内外の人員・物資輸送を担う</td></tr>
+        <tr><td>松島基地</td><td>宮城県東松島市</td><td>第4航空団（T-4練習機）/ ブルーインパルス</td><td>操縦士養成拠点。ブルーインパルスの本拠地。2011年東日本大震災で被災したが復旧・再建</td></tr>
+        <tr><td>百里基地</td><td>茨城県小美玉市</td><td><span class="tag ta">F-2</span> 第7航空団</td><td>首都圏の防空を担う唯一の戦闘機基地。太平洋側からの侵入に対応。茨城空港と滑走路を共用</td></tr>
+        <tr><td>浜松基地</td><td>静岡県浜松市</td><td>航空教育集団司令部 / E-767（4機）/ PAC-3高射隊</td><td>パイロット養成・術科教育の総本山。E-767で広域の航空脅威を探知し戦闘機を誘導する「空のコントロールタワー」</td></tr>
+        <tr><td>小牧基地</td><td>愛知県小牧市</td><td>KC-46A 空中給油・輸送機（4機）/ KC-767（4機）</td><td>南西諸島有事での戦闘機の長距離展開・滞空時間延長を担う空中給油機の拠点</td></tr>
+        <tr><td>小松基地</td><td>石川県小松市</td><td><span class="tag ta">F-15J</span> 第6航空団 / 飛行教導群（トップガン相当）</td><td><b>日本海側唯一の戦闘機基地。</b>日本海対岸（中国・ロシア）まで航空機で約1時間の最前線</td></tr>
+      </tbody></table></div>
+      <div class="why"><b>なぜ小松か？</b> 日本海に面し、中国・ロシア両方に対応できる地理的中間点。他に日本海側の戦闘機基地がない中、北陸という位置が「西の三沢」として機能する。</div>
+    </div>
+    <div class="sub">
+      <div class="sub-hdr"><div class="stripe" style="background:#D4C040"></div><h3>西部航空方面隊</h3><span class="sub-meta">担当：中国四国・九州 ／ 司令部：春日（福岡）</span></div>
+      <div class="tbl-wrap"><table><thead><tr><th>基地名</th><th>所在地</th><th>主な部隊・装備</th><th>役割と立地理由</th></tr></thead><tbody>
+        <tr><td>春日基地</td><td>福岡県春日市</td><td>西部航空方面隊司令部 / 西部航空警戒管制団</td><td>九州・西日本の防空指揮中枢。レーダー情報を集約して要撃機を誘導する</td></tr>
+        <tr><td>築城基地</td><td>福岡県築上郡</td><td><span class="tag ta">F-2</span> 第8航空団</td><td>九州の実戦部隊。対艦攻撃能力を持つF-2で東シナ海方面の海上脅威にも対応</td></tr>
+        <tr><td>新田原基地</td><td>宮崎県新富町</td><td><span class="tag ta">F-15J</span> 第5航空団 / <span class="tag tn">F-35B ▶2025年〜</span></td><td>2025年8月にF-35Bが初配備された南西防衛の新拠点。いずも型護衛艦への艦上運用を見据える</td></tr>
+      </tbody></table></div>
+    </div>
+    <div class="sub">
+      <div class="sub-hdr"><div class="stripe" style="background:var(--air)"></div><h3>南西航空方面隊</h3><span class="sub-meta">担当：沖縄・南西諸島 ／ 司令部：那覇（沖縄）</span></div>
+      <div class="tbl-wrap"><table><thead><tr><th>基地名</th><th>所在地</th><th>主な部隊・装備</th><th>役割と立地理由</th></tr></thead><tbody>
+        <tr><td>那覇基地</td><td>沖縄県那覇市</td><td>南西航空方面隊司令部 / <span class="tag ta">F-15J ×2飛行隊</span></td><td>全国スクランブルの約<b>6割</b>を担う最前線。2024年度対中スクランブル464回。2016年に2飛行隊体制に倍増</td></tr>
+        <tr><td>宮古島分屯基地</td><td>沖縄県宮古島市</td><td>レーダーサイト / 地対空ミサイル部隊（PAC-3）</td><td>先島諸島防衛の最前線。台湾まで約300km。南西シフトを象徴する離島防衛拠点</td></tr>
+      </tbody></table></div>
+      <div class="why"><b>なぜ那覇か？</b> 沖縄本島は南西諸島の中心に位置し、東シナ海・太平洋両方をカバーできる要地。現在の日本防空上の最激戦区。</div>
+    </div>
+  </section>
+
+  <section class="section" id="s-sea">
+    <div class="sec-hdr"><span class="sbadge sb-sea">JMSDF</span><h2>海上自衛隊</h2></div>
+    <div class="note"><b>2026年3月、護衛艦隊が「水上艦隊」に改編。</b>約93隻・40万トンの艦艇が5大基地に分散配備。</div>
+    <div class="sub">
+      <div class="sub-hdr"><div class="stripe" style="background:var(--sea)"></div><h3>5大基地（水上艦艇・潜水艦）</h3></div>
+      <div class="tbl-wrap"><table><thead><tr><th>基地名</th><th>所在地</th><th>主な司令部・艦艇</th><th>役割と立地理由</th></tr></thead><tbody>
+        <tr><td>横須賀基地</td><td>神奈川県横須賀市</td><td>自衛艦隊司令部 / 護衛艦13隻・潜水艦11隻ほか</td><td><b>海自最大・最重要の中枢基地。</b>東京湾口を抑える要地。幕末から明治にかけて旧海軍が整備し、米海軍も駐留する日米共同の核</td></tr>
+        <tr><td>呉基地</td><td>広島県呉市</td><td>第2水上戦群 / 潜水艦約10隻</td><td>旧海軍の大鎮守府を継承。瀬戸内海の出口として太平洋・東シナ海両方へのアクセスに優れる</td></tr>
+        <tr><td>佐世保基地</td><td>長崎県佐世保市</td><td>水陸両用戦機雷戦群司令部 / 第5航空群</td><td>東シナ海に直接面した西方最重要基地。水陸両用作戦・機雷戦の司令部が2026年3月に新編。米海軍も隣接使用</td></tr>
+        <tr><td>舞鶴基地</td><td>京都府舞鶴市</td><td>第3水上戦群・護衛艦</td><td>日本海に唯一面した海自基地。ロシア艦艇が通過する宗谷・津軽海峡を監視</td></tr>
+        <tr><td>大湊基地</td><td>青森県むつ市</td><td>大湊地区隊・護衛艦8隻</td><td>津軽海峡・宗谷海峡のチョークポイントに隣接し、ロシア艦艇の常時監視を担う</td></tr>
+      </tbody></table></div>
+      <div class="why"><b>5基地の地理的役割分担：</b><br>横須賀・呉 → 太平洋正面（潜水艦集中）<br>佐世保 → 東シナ海・大陸正面（西方の盾）<br>舞鶴・大湊 → 日本海・北方正面（ロシア艦艇の監視・阻止）</div>
+    </div>
+    <div class="sub">
+      <div class="sub-hdr"><div class="stripe" style="background:var(--sea)"></div><h3>航空基地（哨戒機）</h3></div>
+      <div class="tbl-wrap"><table><thead><tr><th>基地名</th><th>所在地</th><th>主な部隊・装備</th><th>役割と立地理由</th></tr></thead><tbody>
+        <tr><td>厚木基地</td><td>神奈川県綾瀬市</td><td>第4航空群（P-1哨戒機）/ 米海軍航空隊（共用）/ SH-60哨戒ヘリ隊</td><td><b>海自最大の哨戒機基地。</b>東京湾・太平洋側の対潜哨戒を担う。P-1哨戒機を運用し中国・ロシアの潜水艦を24時間追尾</td></tr>
+        <tr><td>八戸航空基地</td><td>青森県八戸市</td><td>第2航空群（P-1哨戒機）</td><td>日本海・太平洋両方をカバーできる本州北東端の拠点。P-1哨戒機でロシア艦艇・潜水艦の常時監視を担う</td></tr>
+        <tr><td>鹿屋航空基地</td><td>鹿児島県鹿屋市</td><td>第1航空群（P-1哨戒機）/ P-3C（順次退役）</td><td>旧海軍航空基地を継承した南九州の哨戒拠点。東シナ海〜フィリピン海の広域を哨戒し中国潜水艦の動向を24時間監視</td></tr>
+      </tbody></table></div>
+      <div class="why"><b>哨戒機3基地の配置：</b>八戸（北東・ロシア監視）・厚木（太平洋・首都圏）・鹿屋（南西・中国監視）という三角形が日本周辺海域を途切れなくカバーする。</div>
+    </div>
+  </section>
+
+  <section class="section" id="s-land">
+    <div class="sec-hdr"><span class="sbadge sb-land">JGSDF</span><h2>陸上自衛隊（5方面隊）</h2></div>
+    <div class="note"><b>陸上総隊</b>（市ヶ谷）が全国約160カ所の駐屯地・分屯地を一元指揮。</div>
+    <div class="sub">
+      <div class="sub-hdr"><div class="stripe" style="background:var(--land)"></div><h3>方面隊司令部</h3></div>
+      <div class="tbl-wrap"><table><thead><tr><th>方面隊</th><th>司令部</th><th>担当エリア</th><th>主な役割と立地理由</th></tr></thead><tbody>
+        <tr><td>北部方面隊</td><td>札幌駐屯地</td><td>北海道全域</td><td>陸自唯一の機甲師団（第7師団＝戦車部隊）を抱える。冷戦期に対ソ侵攻を想定して最重点整備</td></tr>
+        <tr><td>東北方面隊</td><td>仙台駐屯地</td><td>東北6県</td><td>東日本大震災で統合任務部隊司令部を担った経験。日本海側からの上陸阻止ラインでもある</td></tr>
+        <tr><td>東部方面隊</td><td>朝霞駐屯地（練馬区）</td><td>関東・甲信越・静岡</td><td>首都圏防衛が最大任務。人口の約40%を抱える地域の国家中枢保護と即応性が最優先</td></tr>
+        <tr><td>中部方面隊</td><td>伊丹駐屯地</td><td>東海〜中四国・近畿</td><td>国土面積30%・2府19県を担当。3大都市圏を抱え有事の国民保護が重要任務</td></tr>
+        <tr><td>西部方面隊</td><td>健軍駐屯地（熊本）</td><td>九州・沖縄</td><td>南西諸島・離島防衛のための水陸機動団（相浦駐屯地）を抱える。「南西シフト」の主役</td></tr>
+      </tbody></table></div>
+    </div>
+    <div class="sub">
+      <div class="sub-hdr"><div class="stripe" style="background:var(--land)"></div><h3>注目駐屯地</h3></div>
+      <div class="tbl-wrap"><table><thead><tr><th>駐屯地</th><th>所在地</th><th>役割</th></tr></thead><tbody>
+        <tr><td>相浦駐屯地</td><td>長崎県佐世保市</td><td>水陸機動団（2,100名）の本拠。離島奪還・水陸両用作戦の専門部隊。米海兵隊に相当。佐世保の海自基地に隣接し海自輸送艦との連携による迅速な離島展開が可能</td></tr>
+        <tr><td>那覇駐屯地</td><td>沖縄県那覇市</td><td>第15旅団司令部。南西シフト強化の中心。宮古島・石垣島・与那国島にも部隊を展開</td></tr>
+        <tr><td>与那国駐屯地</td><td>沖縄県与那国島</td><td>台湾から約100km・中国大陸から約500kmの日本最西端。2016年に新設された沿岸監視隊（160名）が海上・空中の異常を常時監視する「哨戒の最前線」</td></tr>
+      </tbody></table></div>
+    </div>
+  </section>
+
+  <section class="section" id="s-def">
+    <div class="sec-hdr"><span class="sbadge sb-def">防衛装備</span><h2>防衛装備・兵器システム（2026年現在）</h2></div>
+    <div class="note"><b>多層防衛：</b>遠くで防ぎ、届かなければ近くで防ぐ重層的な構造。</div>
+    <div class="sub"><div class="sub-hdr"><div class="stripe" style="background:#6868AA"></div><h3>L① 宇宙・早期警戒</h3></div>
+    <div class="tbl-wrap"><table><thead><tr><th>装備</th><th>概要</th></tr></thead><tbody>
+      <tr><td>早期警戒衛星（DSP/SBIRS系）</td><td>米国の衛星情報を共有。弾道ミサイルの発射を赤外線で即時探知。日本は自前の警戒衛星整備を進行中</td></tr>
+      <tr><td>E-767 早期警戒管制機</td><td>浜松基地に4機配備。空中レーダーで広域の航空脅威を探知し戦闘機を誘導する「空のコントロールタワー」</td></tr>
+      <tr><td>E-2D アドバンスト・ホークアイ</td><td>低空飛行するミサイルや飛行機も探知できる最新型艦載早期警戒機。三沢・那覇などに展開</td></tr>
+      <tr><td>宇宙作戦団（府中基地）</td><td>スペースデブリや敵の衛星を監視。宇宙領域での作戦能力を整備中</td></tr>
+    </tbody></table></div></div>
+    <div class="sub"><div class="sub-hdr"><div class="stripe" style="background:#3A8AAA"></div><h3>L② ミッドコース迎撃（大気圏外）</h3></div>
+    <div class="tbl-wrap"><table><thead><tr><th>装備</th><th>搭載艦・配備先</th><th>詳細</th></tr></thead><tbody>
+      <tr><td>SM-3（スタンダードミサイル3）</td><td>イージス護衛艦8隻</td><td>弾道ミサイルを大気圏外で破壊する海上発射型迎撃ミサイル。こんごう型・あたご型各4隻に搭載済み</td></tr>
+      <tr><td>イージス・システム搭載艦（ASEV）<span class="tag tn">建造中</span></td><td>2027〜2028年就役（2隻）</td><td>排水量約2万トン超のアジア最大級水上戦闘艦。SPY-7レーダーを搭載</td></tr>
+      <tr><td>GPI（滑空段階迎撃用誘導弾）<span class="tag td">日米共同開発</span></td><td>2030年代配備目標</td><td>極超音速滑空兵器（HGV）を滑空段階で迎撃する次世代システム</td></tr>
+    </tbody></table></div></div>
+    <div class="sub"><div class="sub-hdr"><div class="stripe" style="background:#3A9A6A"></div><h3>L③ PAC-3（ターミナル迎撃）</h3></div>
+    <div class="tbl-wrap"><table><thead><tr><th>装備</th><th>配備先</th><th>詳細</th></tr></thead><tbody>
+      <tr><td>PAC-3（ペトリオットMSE）</td><td>全国24個高射隊（浜松・入間・春日・那覇・市ヶ谷・宮古島ほか）</td><td>射程約35km。弾道ミサイルを大気圏内で迎撃する最後の盾。移動式なので有事には増援展開も可能</td></tr>
+    </tbody></table></div>
+    <div class="note">SM-3で撃ち漏らした場合にPAC-3で対処する二段構え。北朝鮮発射から沖縄まで約<b>10分</b>という短時間対処を迫られるため常時即応態勢を維持。</div></div>
+    <div class="sub"><div class="sub-hdr"><div class="stripe" style="background:var(--gold)"></div><h3>L④ 戦闘機（航空優勢）</h3></div>
+    <div class="tbl-wrap"><table><thead><tr><th>機種</th><th>保有数・計画</th><th>主な配備基地</th><th>役割</th></tr></thead><tbody>
+      <tr><td>F-35A</td><td>約100機調達計画</td><td>三沢・千歳（順次）</td><td>第5世代ステルス戦闘機。F-4の後継。高いステルス性と情報統合能力で単機制空・対地・電子戦に対応</td></tr>
+      <tr><td>F-35B <span class="tag tn">2025年〜</span></td><td>42機調達計画</td><td>新田原基地 / いずも型護衛艦</td><td>短距離離陸・垂直着陸が可能。いずも型「空母化」と一体で推進。2025年8月に初の3機が新田原に到着</td></tr>
+      <tr><td>F-15J/DJ</td><td>約200機（近代化改修中）</td><td>千歳・小松・那覇・新田原</td><td>現在の数量上の主力。ロシア・中国機へのスクランブルの主役</td></tr>
+      <tr><td>F-2</td><td>約91機</td><td>百里・三沢・築城</td><td>日米共同開発の対艦攻撃特化機。2035年頃から退役開始見込み</td></tr>
+      <tr><td>GCAP（次期戦闘機）<span class="tag td">日英伊共同</span></td><td>約100機 / 2035年目標</td><td>開発中</td><td>F-2の後継となる第6世代戦闘機。AIによる自律飛行・無人機編隊・極超音速対応を目指す</td></tr>
+    </tbody></table></div>
+    <div class="why"><b>「いずも型護衛艦の空母化」：</b>「いずも」「かが」の2隻が順次改修され、F-35Bを搭載・運用できる多用途護衛艦（CVM）に転換中。かがは2024年10月の試験でF-35Bの発着艦能力を確認済み。戦後日本で初の「艦上戦闘機運用能力」の獲得となる。</div></div>
+    <div class="sub"><div class="sub-hdr"><div class="stripe" style="background:var(--air)"></div><h3>L⑤ スタンドオフ攻撃能力（反撃能力）</h3></div>
+    <div class="note">2022年の防衛3文書で「反撃能力」が明記され、長射程ミサイルの取得が急加速。</div>
+    <div style="background:var(--bg3);border-radius:5px;padding:14px 18px;margin:10px 0 14px">
+      <div style="font-size:11px;color:var(--dim);font-family:'IBM Plex Mono',monospace;margin-bottom:10px">ミサイル射程比較</div>
+      <div class="rb"><span class="rb-n">トマホーク</span><div class="rb-o"><div class="rb-i" style="width:100%;background:var(--def)"></div></div><span class="rb-v">約1,600 km</span></div>
+      <div class="rb"><span class="rb-n">12式改良型（目標）</span><div class="rb-o"><div class="rb-i" style="width:94%;background:#C87840"></div></div><span class="rb-v">目標1,500 km</span></div>
+      <div class="rb"><span class="rb-n">12式改良型（現行）</span><div class="rb-o"><div class="rb-i" style="width:63%;background:#D4A840"></div></div><span class="rb-v">約1,000 km</span></div>
+      <div class="rb"><span class="rb-n">JSM</span><div class="rb-o"><div class="rb-i" style="width:31%;background:#4A9A60"></div></div><span class="rb-v">約500 km</span></div>
+      <div class="rb"><span class="rb-n">12式地対艦（現行）</span><div class="rb-o"><div class="rb-i" style="width:13%;background:#4A7A9A"></div></div><span class="rb-v">約200 km</span></div>
+    </div>
+    <div class="tbl-wrap"><table><thead><tr><th>装備</th><th>射程</th><th>担当</th><th>現状</th></tr></thead><tbody>
+      <tr><td>トマホーク（巡航ミサイル）</td><td>約1,600 km</td><td>海自イージス護衛艦</td><td>400発取得。2025年度に護衛艦「ちょうかい」への搭載改修を開始</td></tr>
+      <tr><td>12式地対艦誘導弾 能力向上型<span class="tag tn">2025年度配備</span></td><td>約1,000 km</td><td>陸上自衛隊</td><td>射程200kmの現行型を大幅延伸した国産ミサイル。艦発型・空中発射型も並行開発中</td></tr>
+      <tr><td>JSM（統合打撃ミサイル）</td><td>約500 km</td><td>F-35Aから空中発射</td><td>ノルウェー製。F-35Aの機内兵器庫に収容可能なステルス対応設計。2025年度に納入</td></tr>
+      <tr><td>島嶼防衛用高速滑空弾</td><td>数百 km</td><td>陸上自衛隊</td><td>離島防衛専用の高速滑空ミサイル。Block 1が先行配備段階に</td></tr>
+    </tbody></table></div>
+    <div class="why"><b>なぜ今「スタンドオフ能力」か？</b> 中国・北朝鮮・ロシアのミサイル能力が飛躍的に向上し、相手の射程内に自衛隊が入ると基地・艦船が先に破壊されるリスクが高まった。「相手のミサイルが届かない距離から先に打つ」能力が抑止力として不可欠と判断された。</div></div>
+  </section>
+
+  <section class="section" id="s-str">
+    <div class="sec-hdr"><span class="sbadge sb-gold">全体像</span><h2>脅威対応と多層防衛の全体構造</h2></div>
+    <div class="sg" style="margin-bottom:20px">
+      <div class="sc"><div class="sc-lbl">北方脅威</div><div class="sc-thr">🇷🇺 ロシア</div><div class="sc-u"><span>空：</span>千歳・三沢<br><span>海：</span>大湊・舞鶴・八戸<br><span>陸：</span>北部・東北方面隊</div></div>
+      <div class="sc"><div class="sc-lbl">日本海・西方脅威</div><div class="sc-thr">🇨🇳 中国・🇰🇵 北朝鮮</div><div class="sc-u"><span>空：</span>小松<br><span>海：</span>佐世保・舞鶴<br><span>陸：</span>西部方面隊</div></div>
+      <div class="sc"><div class="sc-lbl">南西・東シナ海</div><div class="sc-thr">🇨🇳 中国の海洋進出</div><div class="sc-u"><span>空：</span>那覇・新田原<br><span>海：</span>佐世保・鹿屋<br><span>陸：</span>西部方面隊・与那国</div></div>
+      <div class="sc"><div class="sc-lbl">首都・太平洋正面</div><div class="sc-thr">🗾 国家中枢防衛</div><div class="sc-u"><span>空：</span>横田・百里・入間<br><span>海：</span>横須賀・呉・厚木<br><span>陸：</span>東部・中部方面隊</div></div>
+    </div>
+    <div class="layer-stack">
+      <div class="li" style="border-color:#6868AA"><div class="ln">L1 発射探知</div><div><div class="lt">宇宙・早期警戒</div><div class="le">早期警戒衛星 / E-767（浜松）/ E-2D</div></div></div>
+      <div class="li" style="border-color:#444466"><div class="ln">（穴）</div><div><div class="lt" style="color:var(--dim)">ブースト段階 — 現在対処困難</div><div class="le">→ GPI（日米共同開発・2030年代）が担う想定</div></div></div>
+      <div class="li" style="border-color:#3A8AAA"><div class="ln">L2 大気圏外</div><div><div class="lt">ミッドコース迎撃</div><div class="le">SM-3（イージス艦8隻）/ ASEV 2隻（2027〜）</div></div></div>
+      <div class="li" style="border-color:#3A9A6A"><div class="ln">L3 ターミナル</div><div><div class="lt">PAC-3</div><div class="le">全国24個高射隊 — 浜松・入間・市ヶ谷・那覇・宮古島ほか</div></div></div>
+      <div class="li" style="border-color:var(--gold)"><div class="ln">L4 航空優勢</div><div><div class="lt">戦闘機スクランブル・巡航ミサイル対処</div><div class="le">F-35A/B / F-15J / F-2 + PAC-3</div></div></div>
+      <div class="li" style="border-color:var(--sea)"><div class="ln">L5 海上</div><div><div class="lt">艦艇接近・対潜</div><div class="le">護衛艦 / 潜水艦22隻 / P-1哨戒機（八戸・厚木・鹿屋・那覇）</div></div></div>
+      <div class="li" style="border-color:var(--land)"><div class="ln">L6 地上</div><div><div class="lt">離島上陸・地上侵攻</div><div class="le">水陸機動団（相浦）/ 陸上自衛隊5方面隊 / 与那国沿岸監視</div></div></div>
+      <div class="li" style="border-color:var(--def)"><div class="ln">L7 反撃</div><div><div class="lt">スタンドオフ攻撃</div><div class="le">トマホーク / 12式改良型 / JSM — 射程500〜1,600km</div></div></div>
+    </div>
+    <div class="why" style="margin-top:12px;border-color:var(--def)">
+      <b>現在の最大の「穴」は極超音速兵器（HGV）への対処。</b> 中国・ロシアが開発を進める極超音速滑空兵器はマッハ5以上で変則軌道を飛ぶため、既存のSM-3やPAC-3では対処が難しい。これに対応するのが日米共同開発中のGPI（2030年代配備目標）である。
+    </div>
+  </section>
+  <footer>資料作成：2026年6月 ／ 出典：防衛省公式サイト・防衛白書・各自衛隊公式資料・Wikipedia各記事ほか<br>地図データ：Natural Earth（50m）via world-atlas CDN / D3.js + TopoJSON<br>※本資料は公開情報に基づく参考情報です。</footer>
+</div>
+<script>
+const W=1300,H=780,CW=240,CG=6,CARD_H=40,CARD_TW=CW-CG*2;
+const FULL_TOP=40,FULL_BOT=H-40,MAP_SCALE=0.8;
+const cY=(FULL_TOP+FULL_BOT)/2,halfH=(FULL_BOT-FULL_TOP)*MAP_SCALE/2;
+// PDF-style: all cards same bright green. Dots = service-type colored.
+const CARD_C='#00EE88';
+const TC={air:'#22CCEE',sea:'#1199CC',land:'#00CC66',both:'#CCAA44'};
+const TB={air:'pb-air',sea:'pb-sea',land:'pb-land',both:'pb-both'};
+const TL={air:'航空自衛隊',sea:'海上自衛隊',land:'陸上自衛隊',both:'統合・複合'};
+
+const BASES=[
+  {id:'sapporo',  side:'r',type:'land',coords:[141.34,43.06],org:'北部方面隊 司令部',  name:'札幌駐屯地',      loc:'北海道札幌市',   brief:'北部方面隊司令部・機甲師団',           units:'北部方面隊司令部',why:'冷戦期に対ソ侵攻を想定して最重点整備。陸自唯一の機甲師団（第7師団＝戦車部隊）を抱え、現在も最大規模の陸上兵力を維持',section:'s-land'},
+  {id:'chitose',  side:'r',type:'air', coords:[141.67,42.79],org:'北部航空方面隊',     name:'千歳基地',        loc:'北海道千歳市',   brief:'F-15J 北海道防空・政府専用機',          units:'第2航空団（F-15J/DJ）<br>特別航空輸送隊（政府専用機）',why:'北海道全域の防空拠点。新千歳空港に隣接し、ロシアとの距離が近い北の要衝',section:'s-air'},
+  {id:'ominato',  side:'r',type:'sea', coords:[141.22,41.28],org:'海上自衛隊',         name:'大湊基地',        loc:'青森県むつ市',   brief:'護衛艦・津軽海峡チョークポイント',       units:'大湊地区隊・護衛艦8隻',why:'津軽海峡・宗谷海峡のチョークポイントに隣接し、ロシア艦艇の常時監視を担う',section:'s-sea'},
+  {id:'hachinohe',side:'r',type:'sea', coords:[141.41,40.52],org:'海上自衛隊',         name:'八戸航空基地',    loc:'青森県八戸市',   brief:'P-1哨戒機・北東太平洋監視',              units:'第2航空群（P-1哨戒機）',why:'日本海・太平洋両方をカバーできる本州北東端の拠点。P-1哨戒機でロシア艦艇・潜水艦の常時監視を担う',section:'s-sea'},
+  {id:'misawa',   side:'r',type:'air', coords:[141.37,40.70],org:'北部航空方面隊 司令部',name:'三沢基地',       loc:'青森県三沢市',   brief:'F-35A・日米共同・北方防衛',              units:'北部航空方面隊司令部<br>第3航空団（F-35A）<br>米空軍も駐留',why:'空自唯一の日米共同使用航空基地。本州最北端に近く、ロシア機スクランブルの第一線。F-35Aで北方最前線の抑止力を担う',section:'s-air'},
+  {id:'matsushima',side:'r',type:'air',coords:[141.22,38.40],org:'中部航空方面隊',     name:'松島基地',        loc:'宮城県東松島市', brief:'T-4練習機・ブルーインパルス',            units:'第4航空団（T-4練習機）<br>ブルーインパルス（T-4×6機）',why:'操縦士養成拠点。ブルーインパルスの本拠地。2011年東日本大震災で被災したが復旧・再建',section:'s-air'},
+  {id:'sendai',   side:'r',type:'land',coords:[140.88,38.26],org:'東北方面隊 司令部',  name:'仙台駐屯地',      loc:'宮城県仙台市',   brief:'東北方面隊司令部',                      units:'東北方面隊司令部',why:'東日本大震災で統合任務部隊司令部を担った経験。日本海側からの上陸阻止ラインでもある',section:'s-land'},
+  {id:'hyakuri',  side:'r',type:'air', coords:[140.41,36.18],org:'中部航空方面隊',     name:'百里基地',        loc:'茨城県小美玉市', brief:'F-2・首都圏防空',                      units:'第7航空団（F-2）',why:'首都圏の防空を担う唯一の戦闘機基地。太平洋側からの侵入に対応。茨城空港と滑走路を共用',section:'s-air'},
+  {id:'asaka',    side:'r',type:'land',coords:[139.60,35.79],org:'東部方面隊 司令部',  name:'朝霞駐屯地',      loc:'東京都練馬区',   brief:'東部方面隊司令部・首都防衛',            units:'東部方面隊司令部',why:'首都圏防衛が最大任務。人口の約40%を抱える地域の国家中枢保護と即応性が最優先',section:'s-land'},
+  {id:'iruma',    side:'r',type:'air', coords:[139.41,35.85],org:'中部航空方面隊 司令部',name:'入間基地',       loc:'埼玉県狭山市',   brief:'C-1/C-2輸送機・航空支援集団司令部',      units:'航空支援集団司令部<br>C-1/C-2 輸送機<br>PAC-3高射隊',why:'兵站・輸送の統括本部。中部航空方面隊司令部でもある',section:'s-air'},
+  {id:'yokota',   side:'r',type:'air', coords:[139.35,35.75],org:'航空総隊 司令部',    name:'横田基地（日米共用）',loc:'東京都福生市',brief:'航空総隊司令部・在日米軍司令部',          units:'航空総隊司令部<br>在日米軍司令部・第5空軍',why:'日本全土の航空防衛作戦を統括する最高指揮機関。2012年に府中から移転',section:'s-cmd'},
+  {id:'fuchu',    side:'r',type:'air', coords:[139.48,35.67],org:'航空自衛隊',         name:'府中基地',        loc:'東京都府中市',   brief:'宇宙作戦団・指揮通信',                  units:'宇宙作戦団<br>航空開発実験集団',why:'かつての防空指揮中枢。現在は宇宙ゴミ（デブリ）監視・宇宙作戦の拠点に転換',section:'s-cmd'},
+  {id:'ichigaya', side:'r',type:'both',coords:[139.74,35.69],org:'防衛省（統合）',     name:'市ヶ谷（防衛省）', loc:'東京都新宿区',   brief:'防衛省本省・統合幕僚監部',               units:'防衛省本省<br>統合幕僚監部<br>陸上総隊司令部<br>PAC-3高射隊',why:'旧陸軍士官学校跡地。東京の政治・行政中枢に近く指揮通信上の利便性が高い。陸・海・空すべての最高指揮中枢',section:'s-cmd'},
+  {id:'atsugi',   side:'r',type:'sea', coords:[139.45,35.45],org:'海上自衛隊',         name:'厚木基地',        loc:'神奈川県綾瀬市', brief:'P-1哨戒機・首都圏対潜',                  units:'第4航空群（P-1哨戒機）<br>米海軍航空隊（共用）<br>SH-60哨戒ヘリ隊',why:'海自最大の哨戒機基地。東京湾・太平洋側の対潜哨戒を担う',section:'s-sea'},
+  {id:'yokosuka', side:'r',type:'sea', coords:[139.67,35.28],org:'海上自衛隊',         name:'横須賀基地',      loc:'神奈川県横須賀市',brief:'自衛艦隊司令部・護衛艦・潜水艦',          units:'自衛艦隊司令部<br>護衛艦13隻・潜水艦11隻ほか',why:'海自最大・最重要の中枢基地。東京湾口を抑える要地。幕末から明治にかけて旧海軍が整備し、米海軍も駐留する日米共同の核',section:'s-sea'},
+  {id:'hamamatsu',side:'r',type:'air', coords:[137.70,34.75],org:'中部航空方面隊',     name:'浜松基地',        loc:'静岡県浜松市',   brief:'航空教育・E-767早期警戒管制（4機）',      units:'航空教育集団司令部<br>E-767 早期警戒管制機（4機）<br>PAC-3高射隊',why:'パイロット養成・術科教育の総本山。E-767早期警戒管制機を4機保有し広域の航空脅威を探知して戦闘機を誘導する',section:'s-air'},
+  {id:'komatsu',  side:'l',type:'air', coords:[136.41,36.39],org:'中部航空方面隊',     name:'小松基地',        loc:'石川県小松市',   brief:'F-15J・日本海側唯一の戦闘機基地',        units:'第6航空団（F-15J）<br>飛行教導群（トップガン相当）',why:'日本海側唯一の戦闘機基地。日本海対岸（中国・ロシア）まで航空機で約1時間の最前線。「西の三沢」',section:'s-air'},
+  {id:'komaki',   side:'l',type:'air', coords:[136.92,35.29],org:'中部航空方面隊',     name:'小牧基地',        loc:'愛知県小牧市',   brief:'KC-46A空中給油機・長距離展開支援',        units:'KC-46A 空中給油・輸送機（4機）<br>KC-767 空中給油機（4機）',why:'南西諸島有事での戦闘機の長距離展開・滞空時間延長を担う空中給油機の拠点',section:'s-air'},
+  {id:'maizuru',  side:'l',type:'sea', coords:[135.38,35.47],org:'海上自衛隊',         name:'舞鶴基地',        loc:'京都府舞鶴市',   brief:'護衛艦・日本海警備',                     units:'第3水上戦群・護衛艦',why:'日本海に唯一面した海自基地。ロシア艦艇が通過する宗谷・津軽海峡を監視',section:'s-sea'},
+  {id:'itami',    side:'l',type:'land',coords:[135.41,34.78],org:'中部方面隊 司令部',  name:'伊丹駐屯地',      loc:'兵庫県伊丹市',   brief:'中部方面隊司令部・関西圏防衛',           units:'中部方面隊司令部',why:'関西圏・経済中枢の防衛。国土面積30%・2府19県を担当。大阪・京都・名古屋という3大都市圏を抱え有事の国民保護が重要任務',section:'s-land'},
+  {id:'kure',     side:'l',type:'sea', coords:[132.57,34.23],org:'海上自衛隊',         name:'呉基地',          loc:'広島県呉市',     brief:'潜水艦・旧鎮守府・艦艇修理',             units:'第2水上戦群<br>潜水艦約10隻',why:'旧海軍の大鎮守府を継承。瀬戸内海の出口として太平洋・東シナ海両方へのアクセスに優れる',section:'s-sea'},
+  {id:'tsuiki',   side:'l',type:'air', coords:[131.05,33.69],org:'西部航空方面隊',     name:'築城基地',        loc:'福岡県築上郡',   brief:'F-2・九州防空',                         units:'第8航空団（F-2）',why:'九州の実戦部隊。対艦攻撃能力を持つF-2で東シナ海方面の海上脅威にも対応',section:'s-air'},
+  {id:'kasuga',   side:'l',type:'air', coords:[130.47,33.53],org:'西部航空方面隊 司令部',name:'春日基地',       loc:'福岡県春日市',   brief:'西部航空方面隊司令部・九州防空指揮',      units:'西部航空方面隊司令部<br>西部航空警戒管制団',why:'九州・西日本の防空指揮中枢。戦闘機は常駐しないがレーダー情報を集約して要撃機を誘導する',section:'s-air'},
+  {id:'sasebo',   side:'l',type:'both',coords:[129.72,33.17],org:'海上自衛隊',         name:'佐世保基地',      loc:'長崎県佐世保市', brief:'水陸両用・機雷戦・米海軍共用',            units:'水陸両用戦機雷戦群司令部<br>第5航空群',why:'東シナ海に直接面した西方最重要基地。水陸両用作戦・機雷戦の司令部が2026年3月に新編。米海軍も隣接使用',section:'s-sea'},
+  {id:'ainoura',  side:'l',type:'land',coords:[129.73,33.23],org:'陸上自衛隊',         name:'相浦駐屯地',      loc:'長崎県佐世保市', brief:'水陸機動団・離島奪還専門部隊',            units:'水陸機動団（2,100名）<br>水陸機動連隊×3',why:'水陸機動団の本拠。離島奪還・水陸両用作戦の専門部隊で米海兵隊に相当',section:'s-land'},
+  {id:'kengun',   side:'l',type:'land',coords:[130.75,32.78],org:'西部方面隊 司令部',  name:'健軍駐屯地',      loc:'熊本県熊本市',   brief:'西部方面隊司令部・南西シフト主役',        units:'西部方面隊司令部',why:'南西諸島・離島防衛のための水陸機動団（相浦駐屯地）を抱える。「南西シフト」の主役',section:'s-land'},
+  {id:'nyutabaru',side:'l',type:'air', coords:[131.45,32.08],org:'西部航空方面隊',     name:'新田原基地',      loc:'宮崎県新富町',   brief:'F-35B南西防衛の新拠点（2025年〜）',      units:'第5航空団（F-15J）<br>臨時F-35B飛行隊（2025年〜）',why:'2025年8月にF-35Bが初配備された南西防衛の新拠点。いずも型護衛艦への艦上運用を見据える',section:'s-air'},
+  {id:'kanoya',   side:'l',type:'sea', coords:[130.85,31.37],org:'海上自衛隊',         name:'鹿屋航空基地',    loc:'鹿児島県鹿屋市', brief:'P-1哨戒機・東シナ海〜フィリピン海哨戒',   units:'第1航空群（P-1哨戒機）<br>P-3C（順次退役）',why:'旧海軍航空基地を継承した南九州の哨戒拠点。東シナ海〜フィリピン海の広域を哨戒し中国潜水艦の動向を24時間監視',section:'s-sea'},
+  {id:'naha',     side:'l',type:'both',coords:[127.65,26.20],org:'南西航空方面隊 司令部',name:'那覇基地',       loc:'沖縄県那覇市',   brief:'F-15J・南西司令部・スクランブル6割',      units:'南西航空方面隊司令部<br>第9航空団（F-15J×2飛行隊）',why:'全国スクランブルの約6割を担う最前線。2024年度対中スクランブル464回。2016年に2飛行隊体制に倍増',section:'s-air'},
+  {id:'naha_gsdf',side:'l',type:'land',coords:[127.66,26.22],org:'陸上自衛隊',         name:'那覇駐屯地（陸自）',loc:'沖縄県那覇市',  brief:'第15旅団・南西諸島作戦拠点',              units:'第15旅団司令部<br>空自那覇基地と同一エリア',why:'南西シフト強化の中心。宮古島・石垣島・与那国島にも部隊を展開',section:'s-land'},
+  {id:'miyako',   side:'l',type:'air', coords:[125.31,24.73],org:'南西航空方面隊',     name:'宮古島分屯基地',  loc:'沖縄県宮古島市', brief:'PAC-3・台湾300km最前線',                  units:'レーダーサイト<br>地対空ミサイル部隊（PAC-3）',why:'先島諸島防衛の最前線。台湾まで約300km・中国大陸まで約450kmという戦略的要衝',section:'s-air'},
+  {id:'yonaguni', side:'l',type:'land',coords:[122.99,24.47],org:'陸上自衛隊',         name:'与那国駐屯地',    loc:'沖縄県与那国島', brief:'沿岸監視隊・台湾100km最西端',              units:'沿岸監視隊（160名）<br>レーダーサイト',why:'台湾から約100km・中国大陸から約500kmの日本最西端。2016年に新設。海上・空中の異常を常時監視する「哨戒の最前線」',section:'s-land'},
+];
+
+// ===== SVG =====
+const svg=d3.select('#map').attr('viewBox',`0 0 ${W} ${H}`);
+const proj=d3.geoMercator();
+const gp=d3.geoPath().projection(proj);
+const GEO={"type":"MultiPolygon","coordinates":[[[[123.879,24.255],[123.938,24.364],[123.926,24.314],[123.879,24.255]]],[[[128.177,26.747],[128.326,26.749],[128.238,26.633],[128.149,26.629],[128.094,26.534],[128.032,26.553],[128.001,26.485],[127.95,26.472],[127.948,26.438],[127.869,26.457],[127.83,26.431],[127.877,26.379],[127.885,26.342],[127.917,26.329],[127.711,26.44],[127.77,26.445],[127.797,26.436],[127.844,26.48],[127.843,26.503],[127.918,26.517],[127.931,26.542],[127.981,26.572],[127.979,26.588],[127.945,26.601],[127.878,26.64],[127.893,26.659],[127.872,26.687],[127.878,26.709],[127.952,26.707],[128.002,26.688],[128.023,26.626],[128.076,26.643],[128.11,26.668],[128.156,26.719],[128.152,26.745],[128.177,26.747]]],[[[130.345,32.412],[130.139,32.297],[130.165,32.297],[130.092,32.255],[130.082,32.244],[130.077,32.212],[130.044,32.199],[130.028,32.214],[130.022,32.189],[129.991,32.196],[130.01,32.237],[129.967,32.243],[129.992,32.284],[130.025,32.301],[130.032,32.274],[130.048,32.304],[130.041,32.314],[130.024,32.316],[129.994,32.307],[129.977,32.33],[129.975,32.358],[130.046,32.489],[130.019,32.535],[130.118,32.548],[130.185,32.548],[130.207,32.473],[130.199,32.448],[130.289,32.484],[130.317,32.517],[130.383,32.524],[130.392,32.499],[130.418,32.524],[130.428,32.516],[130.46,32.53],[130.408,32.435],[130.402,32.426],[130.403,32.395],[130.365,32.389],[130.355,32.377],[130.345,32.412]]],[[[129.652,33.371],[129.744,33.367],[129.77,33.355],[129.785,33.372],[129.813,33.309],[129.868,33.408],[129.783,33.454],[129.806,33.457],[129.805,33.485],[129.838,33.462],[129.858,33.454],[129.85,33.475],[129.827,33.518],[129.875,33.537],[129.89,33.547],[129.931,33.549],[129.968,33.513],[129.939,33.473],[130.019,33.446],[130.044,33.496],[130.1,33.516],[130.152,33.537],[130.163,33.561],[130.156,33.628],[130.199,33.641],[130.209,33.667],[130.235,33.65],[130.272,33.612],[130.373,33.605],[130.4,33.618],[130.414,33.617],[130.421,33.647],[130.432,33.659],[130.43,33.686],[130.395,33.685],[130.466,33.753],[130.467,33.783],[130.443,33.815],[130.472,33.818],[130.477,33.858],[130.516,33.86],[130.524,33.89],[130.594,33.878],[130.665,33.896],[130.682,33.937],[130.747,33.923],[130.753,33.946],[130.777,33.934],[130.814,33.927],[130.823,33.92],[130.856,33.929],[130.891,33.888],[130.93,33.907],[130.962,33.962],[131.019,33.963],[131.021,33.943],[131.039,33.691],[131.055,33.69],[131.099,33.619],[131.128,33.631],[131.23,33.602],[131.288,33.578],[131.403,33.572],[131.469,33.612],[131.504,33.656],[131.529,33.673],[131.575,33.675],[131.585,33.692],[131.624,33.67],[131.691,33.641],[131.74,33.561],[131.738,33.465],[131.702,33.407],[131.596,33.371],[131.592,33.347],[131.551,33.35],[131.538,33.368],[131.499,33.361],[131.511,33.269],[131.631,33.272],[131.671,33.26],[131.704,33.274],[131.712,33.26],[131.778,33.253],[131.872,33.249],[131.902,33.268],[131.871,33.236],[131.868,33.202],[131.834,33.182],[131.828,33.15],[131.798,33.127],[131.844,33.115],[131.9,33.134],[131.915,33.125],[131.852,33.089],[131.863,33.075],[131.91,33.082],[131.912,33.066],[131.941,33.096],[131.973,33.062],[132.001,33.096],[131.929,33.052],[131.901,33.01],[131.902,32.992],[131.889,32.992],[131.958,32.946],[131.974,32.964],[131.981,32.939],[132.003,32.932],[132.033,32.939],[132.085,32.933],[132.008,32.906],[131.977,32.923],[131.986,32.888],[131.96,32.846],[131.949,32.855],[131.956,32.842],[131.942,32.836],[131.963,32.819],[131.98,32.825],[131.984,32.846],[132.008,32.828],[131.971,32.792],[131.954,32.807],[131.936,32.785],[131.919,32.786],[131.902,32.785],[131.889,32.805],[131.895,32.765],[131.874,32.791],[131.871,32.752],[131.885,32.746],[131.859,32.733],[131.864,32.716],[131.849,32.719],[131.855,32.698],[131.817,32.704],[131.79,32.663],[131.778,32.674],[131.763,32.642],[131.75,32.646],[131.772,32.634],[131.754,32.602],[131.693,32.568],[131.685,32.508],[131.713,32.52],[131.728,32.493],[131.694,32.469],[131.658,32.483],[131.641,32.439],[131.627,32.343],[131.611,32.338],[131.571,32.253],[131.463,31.914],[131.454,31.818],[131.487,31.786],[131.458,31.709],[131.411,31.57],[131.381,31.555],[131.388,31.485],[131.362,31.47],[131.371,31.431],[131.332,31.395],[131.344,31.362],[131.109,31.476],[131.035,31.42],[131.014,31.365],[131.107,31.331],[131.073,31.291],[131.066,31.228],[131.016,31.228],[130.984,31.18],[130.94,31.137],[130.872,31.095],[130.747,31.061],[130.661,30.994],[130.678,31.053],[130.747,31.14],[130.766,31.18],[130.789,31.253],[130.802,31.337],[130.757,31.421],[130.698,31.463],[130.697,31.555],[130.636,31.546],[130.591,31.59],[130.677,31.629],[130.716,31.603],[130.719,31.562],[130.764,31.562],[130.822,31.656],[130.794,31.702],[130.737,31.707],[130.729,31.725],[130.687,31.735],[130.615,31.7],[130.561,31.596],[130.557,31.514],[130.532,31.47],[130.512,31.463],[130.525,31.414],[130.557,31.386],[130.57,31.314],[130.622,31.276],[130.667,31.267],[130.649,31.242],[130.655,31.218],[130.63,31.211],[130.645,31.202],[130.635,31.186],[130.594,31.179],[130.554,31.178],[130.52,31.165],[130.506,31.178],[130.508,31.213],[130.462,31.25],[130.353,31.25],[130.291,31.269],[130.173,31.323],[130.209,31.347],[130.272,31.426],[130.321,31.512],[130.334,31.587],[130.315,31.658],[130.274,31.706],[130.212,31.755],[130.186,31.749],[130.166,31.794],[130.223,31.911],[130.2,31.986],[130.173,31.992],[130.206,32.058],[130.172,32.078],[130.175,32.105],[130.223,32.128],[130.266,32.128],[130.308,32.108],[130.351,32.136],[130.359,32.18],[130.379,32.176],[130.402,32.235],[130.433,32.229],[130.427,32.264],[130.449,32.272],[130.464,32.277],[130.464,32.296],[130.489,32.296],[130.464,32.326],[130.505,32.354],[130.489,32.366],[130.573,32.434],[130.569,32.475],[130.542,32.495],[130.573,32.509],[130.539,32.533],[130.633,32.603],[130.616,32.617],[130.653,32.613],[130.66,32.631],[130.651,32.642],[130.459,32.607],[130.459,32.633],[130.607,32.713],[130.607,32.746],[130.59,32.764],[130.612,32.797],[130.578,32.829],[130.583,32.842],[130.523,32.852],[130.527,32.878],[130.439,32.921],[130.429,32.996],[130.395,33.003],[130.421,33.012],[130.428,33.035],[130.424,33.053],[130.409,33.088],[130.387,33.095],[130.396,33.108],[130.372,33.121],[130.374,33.139],[130.288,33.147],[130.245,33.203],[130.215,33.199],[130.222,33.165],[130.149,33.113],[130.122,33.125],[130.128,33.108],[130.14,33.094],[130.19,32.991],[130.224,32.967],[130.203,32.957],[130.183,32.914],[130.128,32.897],[130.089,32.863],[130.186,32.84],[130.241,32.875],[130.294,32.879],[130.339,32.856],[130.377,32.778],[130.368,32.764],[130.374,32.739],[130.345,32.709],[130.349,32.677],[130.301,32.652],[130.259,32.653],[130.232,32.612],[130.188,32.611],[130.168,32.591],[130.167,32.621],[130.13,32.639],[130.126,32.689],[130.171,32.693],[130.201,32.721],[130.207,32.753],[130.184,32.763],[130.193,32.782],[130.179,32.794],[130.083,32.794],[130.022,32.759],[129.991,32.753],[129.98,32.763],[129.949,32.76],[129.955,32.741],[129.924,32.708],[129.913,32.712],[129.893,32.66],[129.836,32.639],[129.831,32.616],[129.781,32.572],[129.765,32.583],[129.739,32.569],[129.735,32.58],[129.778,32.603],[129.816,32.655],[129.836,32.688],[129.815,32.863],[129.847,32.831],[129.852,32.86],[129.868,32.844],[129.88,32.882],[129.892,32.868],[129.896,32.88],[129.932,32.858],[129.95,32.863],[129.978,32.836],[130.008,32.846],[130.066,32.872],[130.027,32.969],[129.949,32.985],[129.921,33.034],[129.872,33.065],[129.82,33.038],[129.836,33.06],[129.765,33.078],[129.768,33.101],[129.785,33.143],[129.731,33.124],[129.726,33.162],[129.701,33.163],[129.658,33.132],[129.68,33.126],[129.697,33.142],[129.673,33.167],[129.636,33.167],[129.657,33.186],[129.636,33.225],[129.568,33.229],[129.564,33.248],[129.575,33.264],[129.588,33.272],[129.582,33.29],[129.622,33.31],[129.568,33.377],[129.617,33.376],[129.624,33.362],[129.652,33.371]]],[[[132.246,34.205],[132.23,34.186],[132.249,34.17],[132.246,34.148],[132.233,34.127],[132.2,34.12],[132.22,34.049],[132.213,34.003],[132.184,33.961],[132.117,33.951],[132.13,33.884],[132.158,33.856],[132.139,33.832],[132.117,33.832],[132.044,33.909],[132.024,33.902],[131.982,33.929],[131.97,33.917],[131.963,33.944],[131.863,33.988],[131.863,34.007],[131.832,34.011],[131.794,33.987],[131.82,33.976],[131.761,33.975],[131.827,34.029],[131.804,34.043],[131.782,34.03],[131.742,34.049],[131.697,34.047],[131.635,34.047],[131.61,34.021],[131.539,33.997],[131.509,34.003],[131.474,34.038],[131.466,34.025],[131.437,33.983],[131.418,34.015],[131.395,33.984],[131.384,34.049],[131.386,34.032],[131.369,34.028],[131.377,34.008],[131.347,33.982],[131.266,33.923],[131.252,33.937],[131.232,33.927],[131.178,33.931],[131.157,33.953],[131.133,34.003],[131.092,34.037],[131.047,34.042],[131.037,34.057],[130.991,33.987],[130.926,33.947],[130.904,33.914],[130.911,34.059],[130.887,34.066],[130.862,34.104],[130.865,34.136],[130.902,34.14],[130.932,34.188],[130.921,34.239],[130.866,34.287],[130.897,34.317],[130.9,34.362],[130.93,34.342],[131.0,34.374],[131.035,34.372],[131.013,34.405],[130.971,34.442],[131.019,34.411],[131.131,34.418],[131.154,34.373],[131.197,34.397],[131.215,34.371],[131.224,34.393],[131.305,34.383],[131.337,34.418],[131.415,34.426],[131.422,34.441],[131.397,34.448],[131.396,34.46],[131.44,34.482],[131.456,34.526],[131.466,34.539],[131.503,34.534],[131.537,34.563],[131.556,34.615],[131.603,34.624],[131.634,34.664],[131.638,34.647],[131.649,34.641],[131.671,34.677],[131.747,34.676],[131.844,34.709],[131.87,34.732],[131.943,34.791],[131.954,34.816],[132.006,34.847],[132.036,34.882],[132.065,34.908],[132.112,34.953],[132.235,35.035],[132.309,35.057],[132.331,35.097],[132.386,35.129],[132.381,35.147],[132.402,35.158],[132.417,35.19],[132.626,35.287],[132.664,35.337],[132.674,35.375],[132.671,35.401],[132.624,35.418],[132.629,35.435],[132.686,35.441],[132.751,35.447],[132.864,35.513],[132.965,35.515],[133.027,35.539],[133.058,35.563],[133.096,35.578],[133.137,35.582],[133.192,35.563],[133.192,35.58],[133.21,35.567],[133.217,35.582],[133.234,35.579],[133.325,35.568],[133.259,35.503],[133.312,35.47],[133.41,35.455],[133.446,35.494],[133.567,35.53],[133.772,35.501],[133.936,35.513],[134.007,35.538],[134.178,35.536],[134.267,35.559],[134.291,35.588],[134.334,35.592],[134.431,35.62],[134.537,35.67],[134.558,35.651],[134.598,35.659],[134.622,35.639],[134.657,35.666],[134.687,35.665],[134.703,35.653],[134.841,35.643],[134.878,35.661],[134.923,35.646],[134.966,35.666],[134.985,35.692],[135.022,35.69],[135.061,35.708],[135.086,35.74],[135.223,35.779],[135.308,35.694],[135.303,35.663],[135.287,35.676],[135.268,35.667],[135.188,35.548],[135.288,35.516],[135.33,35.517],[135.316,35.451],[135.347,35.475],[135.347,35.494],[135.398,35.479],[135.396,35.515],[135.342,35.552],[135.426,35.567],[135.452,35.567],[135.486,35.558],[135.469,35.53],[135.501,35.524],[135.5,35.554],[135.514,35.495],[135.576,35.493],[135.661,35.548],[135.628,35.522],[135.718,35.484],[135.764,35.536],[135.718,35.52],[135.713,35.569],[135.749,35.566],[135.757,35.543],[135.771,35.547],[135.798,35.525],[135.834,35.536],[135.856,35.592],[135.838,35.621],[135.845,35.636],[135.866,35.609],[135.98,35.63],[135.976,35.696],[135.956,35.703],[135.954,35.721],[136.017,35.764],[136.043,35.706],[136.044,35.659],[136.074,35.662],[136.1,35.777],[136.069,35.825],[135.994,35.888],[135.997,35.936],[135.961,35.99],[136.011,36.034],[136.028,36.096],[136.095,36.157],[136.112,36.205],[136.129,36.192],[136.125,36.251],[136.196,36.264],[136.299,36.352],[136.348,36.367],[136.416,36.42],[136.622,36.64],[136.724,36.79],[136.767,36.902],[136.749,36.931],[136.77,36.992],[136.723,37.056],[136.727,37.134],[136.71,37.149],[136.684,37.136],[136.68,37.206],[136.735,37.286],[136.756,37.364],[136.868,37.407],[136.924,37.395],[137.029,37.433],[137.122,37.491],[137.263,37.531],[137.327,37.53],[137.345,37.516],[137.361,37.452],[137.268,37.437],[137.222,37.294],[137.151,37.307],[137.069,37.218],[137.025,37.205],[136.946,37.216],[136.964,37.235],[136.925,37.233],[136.873,37.145],[136.9,37.138],[136.859,37.106],[136.871,37.087],[136.936,37.087],[136.971,37.048],[137.004,37.057],[137.03,37.107],[137.057,36.968],[136.987,36.88],[137.068,36.794],[137.113,36.782],[137.132,36.757],[137.185,36.757],[137.331,36.762],[137.392,36.807],[137.419,36.877],[137.435,36.931],[137.909,37.06],[138.051,37.13],[138.102,37.174],[138.149,37.162],[138.226,37.172],[138.436,37.324],[138.54,37.367],[138.617,37.484],[138.712,37.558],[138.747,37.604],[138.788,37.726],[138.84,37.814],[139.07,37.952],[139.23,37.995],[139.314,38.049],[139.41,38.153],[139.45,38.239],[139.451,38.36],[139.468,38.419],[139.615,38.675],[139.698,38.73],[139.762,38.801],[139.872,39.069],[139.93,39.17],[139.93,39.209],[139.928,39.288],[139.968,39.297],[140.014,39.384],[140.061,39.608],[140.057,39.731],[140.034,39.805],[139.997,39.857],[139.921,39.901],[139.859,39.896],[139.85,39.863],[139.755,39.857],[139.735,39.904],[139.706,39.928],[139.724,39.982],[139.872,39.989],[139.946,40.074],[139.993,40.181],[140.015,40.219],[140.024,40.356],[139.949,40.507],[139.927,40.577],[139.872,40.583],[139.903,40.647],[139.928,40.643],[140.0,40.745],[140.052,40.769],[140.122,40.743],[140.251,40.802],[140.302,40.917],[140.324,41.046],[140.319,41.094],[140.249,41.134],[140.301,41.131],[140.32,41.147],[140.339,41.26],[140.465,41.183],[140.55,41.23],[140.631,41.192],[140.661,40.949],[140.687,40.869],[140.733,40.832],[140.795,40.837],[140.859,40.888],[140.872,40.946],[140.888,41.011],[140.948,40.993],[140.984,40.961],[141.064,40.914],[141.095,40.878],[141.129,40.872],[141.191,40.92],[141.221,40.972],[141.247,41.106],[141.279,41.155],[141.247,41.226],[141.189,41.28],[141.158,41.277],[141.134,41.241],[141.056,41.183],[140.982,41.2],[140.946,41.175],[140.852,41.16],[140.812,41.129],[140.765,41.145],[140.8,41.323],[140.819,41.344],[140.838,41.42],[140.909,41.495],[140.913,41.547],[141.003,41.486],[141.113,41.464],[141.193,41.388],[141.298,41.351],[141.398,41.381],[141.464,41.43],[141.39,41.162],[141.387,40.931],[141.431,40.688],[141.488,40.557],[141.535,40.528],[141.576,40.543],[141.622,40.506],[141.714,40.42],[141.817,40.271],[141.834,40.221],[141.876,40.144],[141.843,40.131],[141.908,40.009],[141.936,40.009],[141.955,39.986],[141.964,39.954],[141.941,39.94],[141.972,39.883],[141.991,39.821],[142.005,39.776],[142.004,39.752],[141.972,39.731],[141.969,39.692],[141.947,39.591],[142.017,39.656],[142.027,39.656],[142.027,39.579],[142.057,39.575],[142.073,39.549],[142.057,39.522],[142.01,39.476],[141.974,39.482],[141.954,39.468],[141.979,39.44],[142.037,39.483],[142.039,39.446],[142.044,39.425],[142.01,39.426],[141.987,39.409],[141.939,39.387],[141.916,39.357],[141.899,39.337],[141.915,39.325],[141.971,39.249],[141.926,39.223],[141.922,39.179],[141.837,39.146],[141.872,39.131],[141.922,39.105],[141.882,39.084],[141.812,39.112],[141.822,39.077],[141.848,39.039],[141.802,39.025],[141.723,39.067],[141.71,39.025],[141.711,38.996],[141.697,38.969],[141.669,38.976],[141.682,38.999],[141.625,39.001],[141.634,38.952],[141.669,38.89],[141.638,38.885],[141.605,38.88],[141.587,38.909],[141.583,38.852],[141.603,38.828],[141.522,38.789],[141.546,38.733],[141.561,38.69],[141.526,38.717],[141.511,38.685],[141.491,38.69],[141.445,38.674],[141.529,38.637],[141.46,38.576],[141.497,38.533],[141.532,38.549],[141.524,38.489],[141.497,38.476],[141.513,38.451],[141.475,38.42],[141.502,38.416],[141.514,38.393],[141.539,38.4],[141.53,38.382],[141.482,38.377],[141.534,38.341],[141.527,38.325],[141.524,38.272],[141.493,38.294],[141.45,38.316],[141.475,38.331],[141.463,38.351],[141.418,38.347],[141.431,38.399],[141.416,38.392],[141.41,38.404],[141.374,38.384],[141.359,38.414],[141.267,38.42],[141.267,38.408],[141.161,38.365],[141.155,38.348],[141.178,38.32],[141.15,38.334],[141.133,38.341],[141.133,38.377],[141.107,38.386],[141.063,38.37],[141.039,38.344],[141.077,38.32],[141.085,38.293],[141.041,38.272],[140.999,38.273],[141.047,38.265],[140.995,38.23],[140.942,38.132],[140.915,37.994],[140.923,37.92],[140.96,37.832],[140.987,37.824],[140.991,37.769],[141.01,37.745],[141.043,37.481],[141.026,37.324],[141.013,37.253],[141.017,37.23],[141.006,37.213],[140.999,37.111],[140.979,37.075],[140.982,36.995],[140.925,36.936],[140.887,36.941],[140.801,36.894],[140.79,36.86],[140.806,36.831],[140.771,36.82],[140.747,36.781],[140.716,36.662],[140.612,36.487],[140.623,36.482],[140.608,36.44],[140.622,36.362],[140.56,36.292],[140.586,36.143],[140.701,35.938],[140.678,35.92],[140.675,35.897],[140.691,35.883],[140.677,35.912],[140.707,35.925],[140.832,35.753],[140.869,35.736],[140.831,35.713],[140.655,35.688],[140.486,35.566],[140.43,35.498],[140.397,35.419],[140.395,35.337],[140.393,35.203],[140.378,35.181],[140.351,35.181],[140.326,35.14],[140.326,35.14],[140.299,35.151],[140.287,35.134],[140.258,35.138],[140.202,35.11],[140.193,35.127],[140.122,35.116],[140.084,35.063],[140.038,35.051],[139.982,35.011],[139.962,34.94],[139.918,34.907],[139.837,34.903],[139.812,34.943],[139.755,34.964],[139.818,34.978],[139.858,35.003],[139.811,35.039],[139.842,35.087],[139.817,35.177],[139.87,35.235],[139.842,35.294],[139.781,35.315],[139.819,35.316],[139.839,35.334],[139.838,35.359],[139.856,35.351],[139.845,35.375],[139.897,35.358],[139.919,35.388],[139.898,35.409],[139.905,35.432],[139.949,35.442],[139.951,35.456],[139.965,35.451],[139.955,35.444],[139.974,35.448],[139.966,35.468],[139.982,35.475],[139.99,35.452],[139.989,35.47],[140.007,35.479],[140.023,35.467],[140.011,35.484],[140.036,35.495],[140.025,35.501],[140.061,35.544],[140.096,35.535],[140.088,35.552],[140.116,35.551],[140.091,35.564],[140.127,35.568],[140.086,35.569],[140.082,35.588],[140.114,35.572],[140.118,35.596],[140.1,35.604],[140.083,35.614],[140.014,35.658],[139.988,35.655],[140.003,35.66],[139.992,35.672],[139.988,35.69],[139.985,35.692],[139.931,35.675],[139.918,35.655],[139.94,35.641],[139.898,35.629],[139.898,35.617],[139.872,35.639],[139.841,35.643],[139.821,35.632],[139.806,35.641],[139.799,35.622],[139.779,35.637],[139.79,35.657],[139.773,35.646],[139.767,35.658],[139.753,35.634],[139.744,35.589],[139.754,35.562],[139.786,35.57],[139.809,35.538],[139.788,35.524],[139.776,35.51],[139.769,35.523],[139.752,35.533],[139.734,35.5],[139.738,35.514],[139.732,35.5],[139.72,35.494],[139.696,35.484],[139.689,35.495],[139.682,35.473],[139.645,35.476],[139.632,35.466],[139.633,35.452],[139.66,35.441],[139.676,35.431],[139.691,35.439],[139.67,35.403],[139.632,35.411],[139.622,35.396],[139.632,35.382],[139.657,35.373],[139.657,35.342],[139.622,35.332],[139.634,35.322],[139.661,35.328],[139.661,35.283],[139.672,35.301],[139.691,35.267],[139.747,35.253],[139.718,35.247],[139.725,35.212],[139.657,35.185],[139.678,35.139],[139.611,35.141],[139.611,35.163],[139.6,35.195],[139.628,35.215],[139.576,35.253],[139.574,35.289],[139.545,35.308],[139.478,35.298],[139.477,35.312],[139.438,35.319],[139.33,35.312],[139.211,35.278],[139.148,35.241],[139.137,35.179],[139.161,35.141],[139.116,35.146],[139.075,35.093],[139.069,35.057],[139.1,35.046],[139.098,35.007],[139.083,35.003],[139.096,34.976],[139.145,34.956],[139.141,34.891],[139.083,34.852],[139.048,34.768],[138.997,34.743],[138.973,34.691],[138.987,34.658],[138.957,34.654],[138.905,34.629],[138.89,34.634],[138.844,34.601],[138.778,34.64],[138.788,34.67],[138.739,34.69],[138.739,34.726],[138.776,34.752],[138.753,34.8],[138.775,34.856],[138.756,34.884],[138.79,34.908],[138.763,34.975],[138.787,35.03],[138.89,35.017],[138.887,35.046],[138.828,35.107],[138.753,35.131],[138.685,35.145],[138.698,35.135],[138.556,35.101],[138.533,35.055],[138.494,35.032],[138.504,35.015],[138.533,35.013],[138.357,34.915],[138.324,34.87],[138.339,34.833],[138.289,34.782],[138.227,34.727],[138.198,34.67],[138.194,34.638],[138.217,34.61],[138.061,34.647],[138.057,34.648],[137.902,34.667],[137.799,34.645],[137.744,34.668],[137.585,34.679],[137.437,34.667],[137.144,34.59],[137.018,34.578],[137.074,34.662],[137.118,34.635],[137.14,34.645],[137.131,34.656],[137.224,34.676],[137.246,34.706],[137.261,34.696],[137.262,34.716],[137.285,34.731],[137.301,34.728],[137.301,34.694],[137.307,34.678],[137.325,34.702],[137.31,34.701],[137.308,34.725],[137.333,34.719],[137.342,34.72],[137.352,34.727],[137.32,34.733],[137.331,34.781],[137.311,34.804],[137.298,34.81],[137.251,34.806],[137.216,34.823],[137.171,34.765],[137.168,34.788],[137.027,34.777],[136.997,34.816],[136.951,34.823],[136.984,34.893],[136.981,34.959],[136.964,34.877],[136.928,34.866],[136.937,34.854],[136.914,34.771],[136.963,34.735],[136.976,34.702],[136.93,34.703],[136.872,34.731],[136.84,34.764],[136.866,34.837],[136.838,34.884],[136.821,34.884],[136.828,34.961],[136.84,34.966],[136.868,35.063],[136.896,35.084],[136.867,35.093],[136.846,35.034],[136.849,35.078],[136.818,35.063],[136.832,35.065],[136.838,35.031],[136.812,35.026],[136.817,35.051],[136.797,35.051],[136.8,35.03],[136.78,35.034],[136.794,35.015],[136.749,35.037],[136.697,35.02],[136.7,35.007],[136.676,35.009],[136.651,34.993],[136.633,34.95],[136.667,34.937],[136.647,34.935],[136.625,34.869],[136.534,34.753],[136.524,34.679],[136.557,34.671],[136.528,34.611],[136.643,34.591],[136.665,34.559],[136.777,34.509],[136.81,34.508],[136.816,34.485],[136.831,34.506],[136.849,34.472],[136.877,34.474],[136.865,34.46],[136.885,34.448],[136.876,34.429],[136.896,34.453],[136.923,34.445],[136.913,34.376],[136.888,34.392],[136.876,34.371],[136.857,34.364],[136.813,34.368],[136.846,34.37],[136.864,34.364],[136.865,34.343],[136.908,34.365],[136.878,34.337],[136.9,34.276],[136.87,34.273],[136.847,34.247],[136.766,34.26],[136.827,34.272],[136.835,34.259],[136.863,34.27],[136.845,34.281],[136.833,34.271],[136.834,34.291],[136.855,34.286],[136.827,34.301],[136.848,34.313],[136.823,34.315],[136.805,34.309],[136.805,34.328],[136.792,34.309],[136.811,34.297],[136.792,34.288],[136.773,34.297],[136.777,34.315],[136.762,34.316],[136.753,34.298],[136.724,34.304],[136.687,34.285],[136.699,34.325],[136.709,34.317],[136.704,34.328],[136.716,34.323],[136.727,34.342],[136.682,34.324],[136.691,34.345],[136.66,34.345],[136.672,34.325],[136.659,34.321],[136.638,34.313],[136.638,34.308],[136.605,34.258],[136.548,34.282],[136.548,34.25],[136.527,34.259],[136.531,34.273],[136.504,34.278],[136.518,34.239],[136.501,34.258],[136.491,34.252],[136.504,34.244],[136.488,34.245],[136.484,34.239],[136.463,34.232],[136.466,34.257],[136.441,34.248],[136.454,34.243],[136.451,34.22],[136.399,34.203],[136.4,34.219],[136.384,34.216],[136.362,34.189],[136.353,34.212],[136.303,34.18],[136.278,34.162],[136.285,34.117],[136.315,34.115],[136.267,34.081],[136.273,34.102],[136.268,34.129],[136.227,34.1],[136.236,34.087],[136.202,34.077],[136.208,34.063],[136.282,34.02],[136.257,33.998],[136.271,33.973],[136.238,33.969],[136.253,33.984],[136.215,33.984],[136.192,33.972],[136.231,33.947],[136.214,33.932],[136.201,33.944],[136.18,33.938],[136.198,33.92],[136.18,33.913],[136.151,33.931],[136.148,33.897],[136.13,33.885],[136.118,33.899],[136.088,33.872],[136.018,33.732],[135.974,33.662],[135.974,33.662],[135.936,33.64],[135.952,33.619],[135.945,33.628],[135.926,33.605],[135.961,33.595],[135.923,33.576],[135.89,33.556],[135.924,33.559],[135.878,33.528],[135.798,33.499],[135.781,33.466],[135.798,33.445],[135.77,33.447],[135.762,33.433],[135.751,33.451],[135.776,33.465],[135.759,33.484],[135.708,33.478],[135.701,33.493],[135.664,33.49],[135.63,33.509],[135.592,33.498],[135.571,33.517],[135.511,33.525],[135.488,33.55],[135.446,33.549],[135.447,33.564],[135.392,33.591],[135.393,33.639],[135.33,33.67],[135.344,33.682],[135.335,33.695],[135.355,33.695],[135.36,33.677],[135.377,33.683],[135.4,33.72],[135.354,33.726],[135.354,33.744],[135.328,33.741],[135.311,33.769],[135.234,33.781],[135.235,33.798],[135.186,33.819],[135.144,33.883],[135.113,33.893],[135.057,33.88],[135.058,33.903],[135.083,33.911],[135.115,33.96],[135.085,33.969],[135.068,33.976],[135.15,34.007],[135.173,34.032],[135.136,34.064],[135.079,34.073],[135.111,34.098],[135.115,34.12],[135.145,34.111],[135.169,34.133],[135.209,34.152],[135.18,34.187],[135.142,34.187],[135.138,34.225],[135.107,34.228],[135.1,34.236],[135.061,34.264],[135.074,34.304],[135.218,34.345],[135.353,34.451],[135.366,34.481],[135.376,34.473],[135.379,34.511],[135.402,34.519],[135.432,34.532],[135.446,34.557],[135.41,34.561],[135.402,34.6],[135.421,34.57],[135.452,34.565],[135.45,34.584],[135.464,34.581],[135.426,34.593],[135.424,34.605],[135.446,34.602],[135.423,34.619],[135.441,34.626],[135.447,34.615],[135.453,34.629],[135.45,34.647],[135.414,34.652],[135.426,34.668],[135.408,34.672],[135.424,34.693],[135.403,34.693],[135.392,34.68],[135.376,34.677],[135.401,34.699],[135.374,34.693],[135.363,34.688],[135.363,34.706],[135.336,34.726],[135.293,34.719],[135.288,34.704],[135.228,34.7],[135.238,34.693],[135.202,34.679],[135.183,34.649],[135.06,34.625],[134.965,34.646],[134.848,34.72],[134.826,34.706],[134.809,34.718],[134.81,34.742],[134.797,34.733],[134.743,34.769],[134.685,34.778],[134.665,34.768],[134.664,34.784],[134.65,34.771],[134.658,34.787],[134.645,34.767],[134.632,34.773],[134.643,34.783],[134.622,34.784],[134.624,34.769],[134.605,34.779],[134.571,34.758],[134.57,34.773],[134.565,34.761],[134.528,34.783],[134.474,34.755],[134.478,34.786],[134.466,34.808],[134.463,34.765],[134.45,34.754],[134.455,34.767],[134.434,34.767],[134.407,34.727],[134.385,34.726],[134.358,34.751],[134.363,34.741],[134.321,34.722],[134.311,34.734],[134.275,34.734],[134.243,34.715],[134.185,34.742],[134.179,34.733],[134.204,34.727],[134.235,34.715],[134.245,34.701],[134.189,34.652],[134.169,34.652],[134.174,34.631],[134.187,34.632],[134.17,34.614],[134.147,34.617],[134.12,34.589],[134.059,34.585],[134.063,34.608],[134.047,34.598],[133.995,34.613],[133.945,34.599],[133.959,34.584],[134.033,34.597],[134.046,34.577],[134.03,34.551],[134.001,34.545],[134.003,34.512],[133.976,34.534],[133.959,34.524],[133.963,34.495],[133.938,34.481],[133.933,34.451],[133.834,34.474],[133.808,34.459],[133.822,34.43],[133.787,34.436],[133.738,34.525],[133.718,34.496],[133.743,34.47],[133.703,34.478],[133.703,34.54],[133.678,34.523],[133.659,34.52],[133.594,34.491],[133.594,34.469],[133.54,34.462],[133.485,34.514],[133.527,34.455],[133.474,34.441],[133.49,34.459],[133.456,34.46],[133.444,34.486],[133.442,34.445],[133.415,34.459],[133.409,34.48],[133.386,34.422],[133.383,34.381],[133.367,34.369],[133.29,34.383],[133.281,34.401],[133.247,34.389],[133.272,34.413],[133.251,34.441],[133.234,34.412],[133.211,34.411],[133.122,34.383],[133.084,34.396],[133.079,34.346],[133.04,34.331],[132.95,34.339],[132.92,34.326],[132.913,34.337],[132.847,34.292],[132.834,34.316],[132.814,34.316],[132.797,34.311],[132.785,34.276],[132.754,34.282],[132.753,34.261],[132.772,34.253],[132.76,34.241],[132.702,34.237],[132.684,34.211],[132.66,34.218],[132.641,34.202],[132.596,34.231],[132.568,34.198],[132.538,34.194],[132.544,34.209],[132.531,34.221],[132.557,34.242],[132.514,34.257],[132.518,34.281],[132.494,34.314],[132.504,34.337],[132.491,34.337],[132.529,34.356],[132.457,34.352],[132.449,34.348],[132.376,34.364],[132.376,34.352],[132.36,34.361],[132.333,34.347],[132.275,34.281],[132.232,34.257],[132.22,34.233],[132.246,34.205]]],[[[141.612,45.277],[141.612,45.313],[141.655,45.35],[141.637,45.401],[141.646,45.451],[141.684,45.421],[141.678,45.407],[141.682,45.404],[141.796,45.408],[141.858,45.435],[141.893,45.512],[141.943,45.522],[141.973,45.481],[142.024,45.449],[142.051,45.403],[142.17,45.341],[142.389,45.138],[142.476,45.068],[142.505,45.061],[142.509,45.041],[142.536,45.029],[142.544,44.988],[142.585,44.962],[142.589,44.92],[142.635,44.885],[142.66,44.842],[142.776,44.732],[142.929,44.628],[142.997,44.558],[143.349,44.372],[143.367,44.337],[143.417,44.309],[143.56,44.253],[143.9,44.154],[144.19,44.105],[144.247,44.113],[144.256,44.041],[144.289,44.021],[144.299,43.984],[144.407,43.945],[144.622,43.918],[144.795,43.932],[144.909,44.004],[144.937,44.044],[144.993,44.07],[145.016,44.1],[145.192,44.196],[145.231,44.253],[145.333,44.346],[145.367,44.259],[145.331,44.193],[145.256,44.126],[145.24,44.059],[145.145,43.97],[145.095,43.893],[145.091,43.837],[145.062,43.808],[145.068,43.753],[145.146,43.646],[145.326,43.597],[145.341,43.587],[145.345,43.559],[145.247,43.522],[145.275,43.41],[145.386,43.292],[145.492,43.267],[145.532,43.314],[145.651,43.391],[145.721,43.384],[145.763,43.4],[145.817,43.386],[145.813,43.37],[145.679,43.313],[145.622,43.317],[145.59,43.278],[145.57,43.284],[145.558,43.22],[145.529,43.205],[145.53,43.187],[145.507,43.184],[145.522,43.166],[145.497,43.159],[145.487,43.187],[145.406,43.186],[145.283,43.17],[145.203,43.137],[145.147,43.145],[145.115,43.123],[145.118,43.081],[145.089,43.067],[145.088,43.047],[145.032,43.03],[145.024,43.0],[144.974,42.982],[144.877,42.987],[144.834,43.014],[144.854,43.05],[144.8,43.059],[144.747,43.025],[144.723,42.98],[144.785,42.939],[144.632,42.951],[144.452,42.944],[144.365,42.972],[144.36,43.0],[144.27,43.003],[144.049,42.942],[143.92,42.875],[143.598,42.642],[143.389,42.416],[143.31,42.261],[143.336,42.191],[143.312,42.055],[143.26,42.003],[143.243,41.953],[143.25,41.926],[143.164,41.983],[143.136,42.027],[143.011,42.081],[142.965,42.119],[142.818,42.142],[142.762,42.175],[142.673,42.192],[142.586,42.244],[142.485,42.271],[142.447,42.304],[142.372,42.325],[142.278,42.377],[142.196,42.447],[142.029,42.485],[141.872,42.59],[141.747,42.623],[141.631,42.629],[141.696,42.658],[141.626,42.645],[141.618,42.624],[141.497,42.604],[141.351,42.543],[141.125,42.42],[141.002,42.302],[140.931,42.337],[140.982,42.324],[140.917,42.37],[140.872,42.461],[140.781,42.5],[140.774,42.537],[140.71,42.584],[140.643,42.587],[140.584,42.568],[140.535,42.589],[140.469,42.587],[140.372,42.503],[140.316,42.42],[140.277,42.311],[140.287,42.253],[140.399,42.216],[140.546,42.115],[140.589,42.109],[140.707,42.139],[140.76,42.117],[140.821,42.036],[140.908,41.985],[140.959,41.918],[141.148,41.855],[141.147,41.832],[141.182,41.818],[141.186,41.803],[141.158,41.786],[141.113,41.787],[141.054,41.727],[140.968,41.711],[140.899,41.748],[140.775,41.775],[140.734,41.767],[140.702,41.741],[140.702,41.785],[140.715,41.767],[140.727,41.781],[140.717,41.807],[140.641,41.817],[140.619,41.798],[140.602,41.743],[140.527,41.701],[140.445,41.685],[140.429,41.587],[140.439,41.555],[140.409,41.517],[140.259,41.482],[140.199,41.399],[140.145,41.429],[140.089,41.418],[140.029,41.462],[139.986,41.552],[139.984,41.606],[140.009,41.692],[140.072,41.774],[140.072,41.806],[140.105,41.805],[140.122,41.822],[140.126,41.856],[140.111,41.864],[140.139,41.895],[140.133,41.976],[140.026,42.113],[139.923,42.134],[139.881,42.208],[139.815,42.222],[139.775,42.26],[139.786,42.274],[139.767,42.311],[139.782,42.354],[139.829,42.394],[139.852,42.463],[139.823,42.614],[139.897,42.68],[140.046,42.695],[140.074,42.728],[140.142,42.753],[140.186,42.828],[140.235,42.797],[140.247,42.769],[140.305,42.779],[140.306,42.829],[140.344,42.856],[140.391,42.923],[140.522,42.992],[140.526,43.032],[140.507,43.037],[140.43,43.143],[140.361,43.181],[140.326,43.222],[140.328,43.259],[140.36,43.316],[140.347,43.334],[140.425,43.33],[140.46,43.346],[140.463,43.372],[140.497,43.373],[140.581,43.311],[140.63,43.298],[140.645,43.286],[140.641,43.267],[140.777,43.226],[140.776,43.204],[140.792,43.195],[141.017,43.24],[141.002,43.205],[141.011,43.192],[141.162,43.145],[141.289,43.198],[141.424,43.329],[141.429,43.42],[141.359,43.519],[141.386,43.587],[141.352,43.645],[141.33,43.725],[141.388,43.807],[141.497,43.839],[141.521,43.86],[141.562,43.86],[141.626,43.92],[141.632,43.96],[141.638,43.947],[141.648,43.945],[141.638,43.954],[141.663,44.038],[141.649,44.315],[141.674,44.327],[141.747,44.433],[141.768,44.555],[141.787,44.587],[141.792,44.67],[141.755,44.837],[141.57,45.199],[141.572,45.235],[141.612,45.277]]]]};
+proj.fitExtent([[-400+CW+CG,cY-halfH],[W-CW-CG+400,cY+halfH]],GEO);
+window.JP_PROJ=proj;
+
+const defs=svg.append('defs');
+const pat=defs.append('pattern').attr('id','grid').attr('width',32).attr('height',32).attr('patternUnits','userSpaceOnUse');
+pat.append('path').attr('d','M32 0 L0 0 0 32').attr('fill','none').attr('stroke','#0c2038').attr('stroke-width',0.4);
+svg.append('rect').attr('width',W).attr('height',H).attr('fill','#050d1c');
+svg.append('rect').attr('width',W).attr('height',H).attr('fill','url(#grid)');
+svg.append('line').attr('x1',CW+CG).attr('y1',24).attr('x2',CW+CG).attr('y2',H-24).attr('stroke','#0d2540').attr('stroke-width',1);
+svg.append('line').attr('x1',W-CW-CG).attr('y1',24).attr('x2',W-CW-CG).attr('y2',H-24).attr('stroke','#0d2540').attr('stroke-width',1);
+
+// Land
+const landG=svg.append('g').attr('id','land-g');
+landG.append('path').datum(GEO).attr('d',gp).attr('fill','none').attr('stroke','#1a5080').attr('stroke-width',4).attr('opacity',0.2);
+landG.append('path').datum(GEO).attr('d',gp).attr('fill','#0c2235').attr('stroke','#1e4a70').attr('stroke-width',0.8);
+d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json').then(w=>{
+  const jp=topojson.feature(w,w.objects.countries).features.find(f=>+f.id===392);
+  if(!jp)return;
+  landG.selectAll('path').remove();
+  landG.append('path').datum(jp).attr('d',gp).attr('fill','none').attr('stroke','#1a5080').attr('stroke-width',3).attr('opacity',0.18);
+  landG.append('path').datum(jp).attr('d',gp).attr('fill','#0c2235').attr('stroke','#1e4a70').attr('stroke-width',0.75);
+}).catch(()=>{});
+
+// SVG legend (inside map, top-center — PDF style)
+const legG=svg.append('g').attr('transform',`translate(${W/2-80},22)`);
+[{label:'陸上自衛隊',color:'#00CC66'},{label:'海上自衛隊',color:'#1199CC'},{label:'航空自衛隊',color:'#22CCEE'}].forEach((li,i)=>{
+  const g=legG.append('g').attr('transform',`translate(${i*100},0)`);
+  g.append('circle').attr('r',4.5).attr('cx',6).attr('cy',7).attr('fill','none').attr('stroke',li.color).attr('stroke-width',1.5);
+  g.append('circle').attr('r',2).attr('cx',6).attr('cy',7).attr('fill',li.color);
+  g.append('text').attr('x',15).attr('y',11).attr('fill','#6a9ab8').attr('font-size',9)
+    .attr('font-family',"'Noto Sans JP',sans-serif").text(li.label);
+});
+
+// Compute pin positions
+const bwp=BASES.map(b=>{const p=proj(b.coords);return{...b,px:p?p[0]:null,py:p?p[1]:null};}).filter(b=>b.px!==null);
+const rB=bwp.filter(b=>b.side==='r').sort((a,b)=>a.py-b.py);
+const lB=bwp.filter(b=>b.side==='l').sort((a,b)=>a.py-b.py);
+
+const connG=svg.append('g').attr('id','conn-g');
+const cardG=svg.append('g').attr('id','card-g');
+const pinG =svg.append('g').attr('id','pin-g');
+
+function cardCY(i,n){const CT=30,CB=H-30;return CT+(CB-CT)/n*(i+0.5);}
+
+function drawCol(bases,isRight){
+  const n=bases.length;
+  bases.forEach((b,i)=>{
+    const cy=cardCY(i,n);
+    const cx=isRight?W-CW+CG:CG;
+    const ex=isRight?W-CW+CG:CG+CARD_TW;
+
+    // Straight diagonal connector (PDF style)
+    connG.append('line')
+      .attr('x1',ex).attr('y1',cy)
+      .attr('x2',b.px).attr('y2',b.py)
+      .attr('stroke',CARD_C).attr('stroke-width',0.6).attr('opacity',0.35)
+      .attr('class',`conn conn-${b.id}`).attr('data-type',b.type);
+
+    // Card — PDF style: dark bg + uniform green border
+    const cg=cardG.append('g')
+      .attr('class',`card card-${b.id}`).attr('data-type',b.type).attr('data-id',b.id)
+      .style('cursor','pointer').on('click',()=>openModal(b));
+    cg.append('rect').attr('x',cx).attr('y',cy-CARD_H/2)
+      .attr('width',CARD_TW).attr('height',CARD_H).attr('rx',2)
+      .attr('fill','#040d1a').attr('fill-opacity',0.92)
+      .attr('stroke',CARD_C).attr('stroke-width',0.9).attr('stroke-opacity',0.75);
+    // Name: bright green (PDF uniform)
+    cg.append('text').attr('x',cx+8).attr('y',cy-CARD_H/2+15)
+      .attr('fill',CARD_C).attr('font-size',11.5).attr('font-weight',700)
+      .attr('font-family',"'Noto Sans JP',sans-serif").text(b.name);
+    // Brief: dim green
+    const brief=b.brief.length>29?b.brief.slice(0,28)+'…':b.brief;
+    cg.append('text').attr('x',cx+8).attr('y',cy-CARD_H/2+29)
+      .attr('fill','#33aa66').attr('font-size',9).attr('font-family',"'IBM Plex Mono',monospace").text(brief);
+    // Hover overlay
+    cg.append('rect').attr('x',cx).attr('y',cy-CARD_H/2)
+      .attr('width',CARD_TW).attr('height',CARD_H).attr('fill','transparent')
+      .on('mouseenter',()=>cg.selectAll('rect').filter((d,j)=>j===0).attr('stroke-opacity',1).attr('fill-opacity',0.97))
+      .on('mouseleave',()=>cg.selectAll('rect').filter((d,j)=>j===0).attr('stroke-opacity',0.75).attr('fill-opacity',0.92));
+  });
+}
+drawCol(rB,true);
+drawCol(lB,false);
+
+// Pins (concentric circles, service-type colored)
+bwp.forEach(b=>{
+  const color=TC[b.type];
+  const g=pinG.append('g')
+    .attr('transform',`translate(${b.px.toFixed(1)},${b.py.toFixed(1)})`)
+    .attr('class',`pin pin-${b.id}`).attr('data-type',b.type).attr('data-id',b.id)
+    .style('cursor','pointer');
+  // Pulse ring
+  const ring=g.append('circle').attr('r',5).attr('fill','none')
+    .attr('stroke',color).attr('stroke-width',1.2).attr('opacity',0.8);
+  ring.append('animate').attr('attributeName','r').attr('values','4;12').attr('dur','2.2s').attr('repeatCount','indefinite');
+  ring.append('animate').attr('attributeName','opacity').attr('values','0.8;0').attr('dur','2.2s').attr('repeatCount','indefinite');
+  // Static ring
+  g.append('circle').attr('r',5).attr('fill','none').attr('stroke',color).attr('stroke-width',1.2).attr('opacity',0.7);
+  // Inner dot
+  g.append('circle').attr('r',3).attr('fill',color).attr('opacity',0.9).attr('class','pdot');
+  // Center
+  g.append('circle').attr('r',1.2).attr('fill','#050d1c');
+  // Hit area
+  g.append('circle').attr('r',9).attr('fill','transparent')
+    .on('click',e=>{e.stopPropagation();openModal(b);})
+    .on('mouseenter',()=>g.select('.pdot').attr('r',4.5))
+    .on('mouseleave',()=>g.select('.pdot').attr('r',3));
+});
+
+// Auto-scroll map to center on mobile
+window.addEventListener('load',()=>{
+  if(window.innerWidth<750){
+    const el=document.getElementById('map-scroll');
+    el.scrollLeft=(1100-window.innerWidth)/2;
+  }
+});
+
+// ===== MODAL =====
+let curSection='s-air';
+function openModal(b){
+  document.getElementById('m-badge').className='m-badge '+TB[b.type];
+  document.getElementById('m-badge').textContent=TL[b.type];
+  document.getElementById('m-org').textContent=b.org;
+  document.getElementById('m-name').textContent=b.name;
+  document.getElementById('m-loc').textContent='📍 '+b.loc;
+  document.getElementById('m-units').innerHTML=b.units;
+  document.getElementById('m-why').textContent=b.why;
+  curSection=b.section||'s-air';
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function closeModal(){document.getElementById('modal-overlay').classList.remove('open');}
+function gotoSection(){
+  closeModal();
+  setTimeout(()=>{
+    const el=document.getElementById(curSection);
+    if(!el)return;
+    el.scrollIntoView({behavior:'smooth'});
+    el.style.transition='background 0.4s';
+    el.style.background='rgba(0,238,136,.06)';
+    setTimeout(()=>{el.style.background='';},1400);
+  },200);
+}
+function handleOverlayClick(e){if(e.target===document.getElementById('modal-overlay'))closeModal();}
+
+// ===== FILTER =====
+function filterAll(type){
+  document.querySelectorAll('.fbtn').forEach(b=>{
+    b.classList.remove('active','inactive');
+    const cl=b.classList[1];
+    const bt={ball:'all',fair:'air',fsea:'sea',fland:'land',fboth:'both'}[cl];
+    if(type==='all'){b.classList.add(cl==='ball'?'active':'inactive');}
+    else            {b.classList.add(bt===type  ?'active':'inactive');}
+  });
+  d3.selectAll('.pin,.card,.conn').each(function(){
+    const t=this.getAttribute('data-type');
+    d3.select(this).style('display',(type==='all'||t===type)?null:'none');
+  });
+}
+function go(id){document.getElementById(id).scrollIntoView({behavior:'smooth'});}
+</script>
+</body></html>
